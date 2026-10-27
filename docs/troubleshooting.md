@@ -23,9 +23,29 @@ nie mehr ändern (sonst werden offene Einladungen ungültig). Nicht dynamisch im
 
 ### `LaTeX Error: File 'scrlttr2.cls' not found`
 
-Das Overleaf-Image enthält nur ein minimales TeX Live ohne KOMA-Script.
-Lösungen siehe [`../overleaf/README.md`](../overleaf/README.md#latex-pakete).
-`tlmgr install` im laufenden Container ist nicht dauerhaft – beim Neuerstellen ist das Paket weg.
+Das Overleaf-Image enthält nur ein minimales TeX Live ohne KOMA-Script. Tritt der Fehler
+auf, sind Sandboxed Compiles nicht aktiv – mit dem Compose aus diesem Repository kompiliert
+Overleaf in `texlive/texlive:latest-full`, siehe [`../overleaf/README.md`](../overleaf/README.md#tex-live).
+`tlmgr install` im laufenden Overleaf-Container ist keine Lösung – beim Neuerstellen ist das Paket weg.
+
+### Kompilieren schlägt fehl, seit Sandboxed Compiles aktiv sind
+
+Fast immer stimmt `OVERLEAF_HOST_DATA_DIR` nicht: Der Docker-Daemon des Hosts kann die
+Projektdateien dann nicht in den Compile-Container mounten (leere Ausgabe, „No PDF“,
+Fehler zu `/compile`). Prüfen und in `.env` korrigieren:
+
+```bash
+docker volume inspect -f '{{.Mountpoint}}' <projekt>_sharelatex_data
+docker compose up -d --force-recreate sharelatex
+```
+
+Weitere Ursachen: TeX-Live-Image nicht geladen (`docker images texlive/texlive`), Socket nicht
+gemountet, oder Docker läuft rootless bzw. in einer VM (Docker Desktop) – dann stimmen
+Host-Pfade aus Sicht des Daemons nicht mit denen der Shell überein. Diagnose:
+
+```bash
+docker compose logs sharelatex | grep -iE 'clsi|docker|sandbox' | tail -30
+```
 
 ### `pdflatex` nicht gefunden nach Upgrade
 

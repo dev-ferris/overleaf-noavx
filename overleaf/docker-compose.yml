@@ -4,8 +4,8 @@
 #   cp overleaf.env.example overleaf.env    # Overleaf-Konfiguration (Secrets!)
 #   docker compose up -d
 #
-# Sandboxed Compiles (volles TeX Live pro Projekt) zusätzlich mit:
-#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up -d
+# TeX Live: vollständig über Sandboxed Compiles (Service "texlive"). Vor dem ersten Start
+# OVERLEAF_HOST_DATA_DIR in .env prüfen, siehe README.
 #
 # Admin-Shell für MongoDB (das no-AVX-Image enthält kein mongosh):
 #   docker compose run --rm mongo-shell                         # interaktiv
@@ -66,6 +66,15 @@ services:
           print("Replica Set initialisiert");
         }
 
+  # Vollständiges TeX Live für Sandboxed Compiles.
+  # Läuft nicht dauerhaft: Der Service sorgt nur dafür, dass "docker compose up/pull"
+  # das Image lädt (~5 GB). Overleaf startet daraus pro Projekt einen Compile-Container.
+  texlive:
+    image: ${TEXLIVE_IMAGE:-texlive/texlive:latest-full}
+    restart: "no"
+    entrypoint: ["true"]
+    network_mode: none
+
   sharelatex:
     <<: *common
     image: ${OVERLEAF_IMAGE:-overleafcep/sharelatex:6.3.0-ext-v5.1}
@@ -75,12 +84,30 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      texlive:
+        condition: service_completed_successfully
     environment:
       OVERLEAF_MONGO_URL: mongodb://mongo/sharelatex?replicaSet=rs0
       OVERLEAF_REDIS_HOST: redis
       REDIS_HOST: redis
+
+      # --- Sandboxed Compiles (CEP) ----------------------------------------
+      # Jedes Projekt kompiliert in einem eigenen TeX-Live-Container -> alle Pakete verfügbar.
+      DOCKER_RUNNER: "true"
+      SANDBOXED_COMPILES: "true"
+      ALL_TEX_LIVE_DOCKER_IMAGES: ${TEXLIVE_IMAGE:-texlive/texlive:latest-full}
+      ALL_TEX_LIVE_DOCKER_IMAGE_NAMES: ${TEXLIVE_IMAGE_NAME:-TeX Live (vollständig)}
+      TEX_LIVE_DOCKER_IMAGE: ${TEXLIVE_IMAGE:-texlive/texlive:latest-full}
+      # Die Compile-Container startet der Docker-Daemon des HOSTS. Er braucht deshalb
+      # die Host-Pfade der Verzeichnisse unter /var/lib/overleaf/data.
+      SANDBOXED_COMPILES_HOST_DIR_COMPILES: ${OVERLEAF_HOST_DATA_DIR:-/var/lib/docker/volumes/overleaf_sharelatex_data/_data}/data/compiles
+      SANDBOXED_COMPILES_HOST_DIR_OUTPUT: ${OVERLEAF_HOST_DATA_DIR:-/var/lib/docker/volumes/overleaf_sharelatex_data/_data}/data/output
+      SANDBOXED_COMPILES_HOST_DIR_CACHE: ${OVERLEAF_HOST_DATA_DIR:-/var/lib/docker/volumes/overleaf_sharelatex_data/_data}/data/cache
     volumes:
       - sharelatex_data:/var/lib/overleaf
+      # Zugriff auf den Docker-Daemon zum Starten der Compile-Container.
+      # Sicherheitshinweis: entspricht faktisch Root-Rechten auf dem Host.
+      - /var/run/docker.sock:/var/run/docker.sock
     labels:
       autoheal: "true"
       # caddy-docker-proxy: Route aus den Labels erzeugen

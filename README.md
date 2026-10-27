@@ -10,7 +10,7 @@ Dieses Repository enthält alles, um das zu umgehen:
 | Verzeichnis | Inhalt |
 |---|---|
 | [`mongodb-noavx/`](mongodb-noavx) | Build von MongoDB 8.0 ohne AVX als Docker-Image |
-| [`overleaf/`](overleaf) | Docker-Compose-Setup für Overleaf CEP 6.x mit Caddy als HTTPS-Proxy |
+| [`overleaf/`](overleaf) | Docker-Compose-Setup für Overleaf CEP 6.x mit vollständigem TeX Live und Caddy als HTTPS-Proxy |
 | [`docs/migration-5.5-to-6.3.md`](docs/migration-5.5-to-6.3.md) | Upgrade von Overleaf 5.5 + MongoDB 7 auf 6.3 + MongoDB 8 |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Fehlerbilder und Lösungen |
 
@@ -52,6 +52,8 @@ Details: [`mongodb-noavx/README.md`](mongodb-noavx/README.md)
 cd overleaf
 cp .env.example .env && cp overleaf.env.example overleaf.env
 # Hostname, Secret (openssl rand -base64 32) usw. eintragen
+docker compose up --no-start     # Volumes anlegen, Images ziehen (TeX Live ~5 GB)
+# OVERLEAF_HOST_DATA_DIR in .env mit "docker volume inspect" abgleichen (siehe overleaf/README.md)
 docker compose up -d
 ```
 
@@ -67,6 +69,7 @@ Details: [`overleaf/README.md`](overleaf/README.md)
 | Overleaf | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
 | MongoDB | [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx) – 8.0.17, `-march=nehalem`, Build über [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
 | Redis | 7.4 |
+| TeX Live | `texlive/texlive:latest-full` über Sandboxed Compiles |
 | Reverse Proxy | caddy-docker-proxy |
 | Build-Host | Intel-Mac, Docker Desktop, 12 GB VM |
 

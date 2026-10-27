@@ -7,7 +7,7 @@ Ausgangslage:
 | Overleaf | `overleafcep/sharelatex:5.5.6-ext-v3.3` | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
 | MongoDB | `ghcr.io/fenio/mongodb-no-avx:7.0.28` | `devferris/mongodb-no-avx:8.0.17-nehalem` (oder Eigenbau) |
 | Redis | `valkey/valkey:9.2-alpine` | `redis:7.4-alpine` |
-| TeX Live | `texlive-init`-Volume | Sandboxed Compiles oder eigenes Image |
+| TeX Live | `texlive-init`-Volume | Sandboxed Compiles mit `texlive/texlive:latest-full` |
 
 Overleaf 6 setzt voraus:
 
@@ -230,13 +230,22 @@ OVERLEAF_FILESTORE_MIGRATION_LEVEL=2
 
 **TeX Live:** Das alte `texlive-init`-Volume wird nicht mehr eingebunden – Overleaf 6.3 basiert
 auf einem neueren TeX-Live-Jahrgang, ein altes Volume würde die Symlinks im Image brechen
-(`pdflatex` nicht gefunden). Für volle Paketauswahl Sandboxed Compiles verwenden, siehe
-[`../overleaf/README.md`](../overleaf/README.md#latex-pakete).
+(`pdflatex` nicht gefunden). Das neue Compose kompiliert stattdessen über Sandboxed Compiles
+mit vollständigem TeX Live, siehe [`../overleaf/README.md`](../overleaf/README.md#tex-live).
+Dafür muss `OVERLEAF_HOST_DATA_DIR` in `.env` auf das **bestehende** Datenvolume zeigen:
+
+```bash
+docker volume inspect -f '{{.Mountpoint}}' ${PROJECT}_sharelatex_data
+```
+
+Bestehende Projekte bekommen beim ersten Öffnen automatisch das Standard-Image
+(`TEX_LIVE_DOCKER_IMAGE`) zugewiesen.
 
 **Starten:**
 
 ```bash
 docker volume ls | grep "^local *${PROJECT}_"     # mongo_data und sharelatex_data müssen auftauchen
+docker compose pull                                # TeX Live ~5 GB, dauert
 docker compose up -d
 docker compose logs -f sharelatex
 ```
@@ -244,8 +253,8 @@ docker compose logs -f sharelatex
 Beim ersten Start laufen die Datenbank-Migrationen von 5.5 auf 6.3; das dauert einige Minuten.
 `mongo-init` meldet „Replica Set bereits initialisiert“.
 
-**Prüfen:** Login, bestehendes Projekt öffnen, Bilder sichtbar, kompilieren, History öffnen,
-Einladung an einen zweiten Nutzer.
+**Prüfen:** Login, bestehendes Projekt öffnen, Bilder sichtbar, kompilieren (auch ein
+KOMA-Script-Brief mit `scrlttr2`), History öffnen, Einladung an einen zweiten Nutzer.
 
 ---
 
