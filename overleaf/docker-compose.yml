@@ -1,0 +1,111 @@
+# Overleaf Community Edition Extended (CEP) 6.x mit MongoDB 8 ohne AVX
+#
+#   cp .env.example .env                    # Compose-Variablen (Images, Hostname, Pfade)
+#   cp overleaf.env.example overleaf.env    # Overleaf-Konfiguration (Secrets!)
+#   docker compose up -d
+#
+# Sandboxed Compiles (volles TeX Live pro Projekt) zusätzlich mit:
+#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml up -d
+#
+# Admin-Shell für MongoDB (das no-AVX-Image enthält kein mongosh):
+#   docker compose run --rm mongo-shell                         # interaktiv
+#   docker compose run --rm mongo-shell --quiet --eval 'db.version()'
+
+name: ${COMPOSE_PROJECT_NAME:-overleaf}
+
+x-common: &common
+  restart: unless-stopped
+
+services:
+  redis:
+    <<: *common
+    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    <<: *common
+    # Selbst gebautes MongoDB 8.0 ohne AVX, siehe ../mongodb-noavx
+    image: ${MONGO_IMAGE:-mongodb-no-avx:8.0.17-nehalem}
+    command: "--replSet rs0 --bind_ip_all --wiredTigerCacheSizeGB ${MONGO_CACHE_GB:-1}"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      # Kein mongosh im Image -> TCP-Check auf den Port
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/27017'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Initialisiert das Replica Set einmalig (idempotent, beendet sich danach).
+  # Overleaf braucht ein Replica Set; der Hostname muss "mongo:27017" sein,
+  # sonst trägt MongoDB die Container-ID ein, die nach einem Neuerstellen nicht mehr stimmt.
+  mongo-init:
+    image: ${MONGOSH_IMAGE:-alpine/mongosh:latest}
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint: ["mongosh", "mongodb://mongo:27017/?directConnection=true", "--quiet", "--eval"]
+    command:
+      - |
+        try {
+          rs.status();
+          print("Replica Set bereits initialisiert");
+        } catch (e) {
+          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
+          print("Replica Set initialisiert");
+        }
+
+  sharelatex:
+    <<: *common
+    image: ${OVERLEAF_IMAGE:-overleafcep/sharelatex:6.3.0-ext-v5.1}
+    env_file: overleaf.env
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      OVERLEAF_MONGO_URL: mongodb://mongo/sharelatex?replicaSet=rs0
+      OVERLEAF_REDIS_HOST: redis
+      REDIS_HOST: redis
+    volumes:
+      - sharelatex_data:/var/lib/overleaf
+    labels:
+      autoheal: "true"
+      # caddy-docker-proxy: Route aus den Labels erzeugen
+      caddy: ${OVERLEAF_HOSTNAME:-https://overleaf.example.com}
+      caddy.reverse_proxy: "{{upstreams 80}}"
+      caddy_ingress_network: ${CADDY_NETWORK:-caddy}
+    networks:
+      - default
+      - caddy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  mongo-shell:
+    image: ${MONGOSH_IMAGE:-alpine/mongosh:latest}
+    profiles: ["tools"]
+    entrypoint: ["mongosh", "mongodb://mongo:27017/?directConnection=true"]
+    depends_on:
+      - mongo
+
+volumes:
+  sharelatex_data:
+  mongo_data:
+  redis_data:
+
+networks:
+  caddy:
+    external: true
+    name: ${CADDY_NETWORK:-caddy}
