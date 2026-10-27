@@ -12,8 +12,8 @@ Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 
 | Datei | Zweck |
 |---|---|
-| `docker-compose.yml` | Redis, MongoDB, Replica-Set-Init, TeX-Live-Volume, Overleaf, mongosh-Werkzeug |
-| `.env.example` | Compose-Variablen: Images, Port, Projektname |
+| `docker-compose.yml` | Redis, MongoDB, Replica-Set-Init, TeX-Live-Volume, Overleaf, Backup, mongosh-Werkzeug |
+| `.env.example` | Compose-Variablen: Images, Port, Projektname, Backup-Zeitplan |
 | `overleaf.env.example` | Overleaf-Konfiguration inkl. Secrets |
 
 ## Voraussetzungen
@@ -42,8 +42,9 @@ docker compose logs -f texlive-init    # erster Start: kopiert TeX Live ins Volu
 docker compose logs -f sharelatex      # danach: Migrationen, einige Minuten
 ```
 
-Die Startreihenfolge erzwingt Compose: `mongo` (healthy) → `mongo-init` (Replica Set) →
-`redis` (healthy) → `texlive-init` (TeX Live im Volume) → `sharelatex`.
+Die Startreihenfolge erzwingt Compose: `mongo` (healthy) → `mongo-init` (Replica Set mit
+Primary, healthy) → `redis` (healthy) → `texlive-init` (TeX Live im Volume) → `sharelatex`.
+`mongo-init` läuft danach weiter, weil das Backup darin `mongodump` ausführt.
 
 ### Ersten Administrator anlegen
 
@@ -155,21 +156,82 @@ docker compose run --rm mongo-shell --quiet --eval \
   'db.getSiblingDB("sharelatex").users.updateOne({email: "du@example.com"}, {$set: {isAdmin: true}})'
 ```
 
-**Backup** (konsistent im gestoppten Zustand):
+## Backup
+
+Der Service `backup` ([offen/docker-volume-backup](https://github.com/offen/docker-volume-backup))
+sichert täglich um 03:00 (`BACKUP_CRON`, Zeitzone `TZ`) nach `./backup` (`BACKUP_DIR`) und löscht
+Archive älter als 14 Tage (`BACKUP_RETENTION_DAYS`).
+
+**Ablauf eines Laufs:**
+
+1. `archive-pre` im Container `mongo-init`: `mongodump --oplog --gzip` nach Volume `mongo_dump` –
+   bei laufender Datenbank, `--oplog` macht den Dump trotzdem konsistent
+2. `sharelatex` und `redis` werden gestoppt (Label `docker-volume-backup.stop-during-backup`)
+3. Archiv `overleaf-<zeitstempel>.tar.gz` aus `mongo_dump`, `sharelatex_data`, `redis_data`,
+   `overleaf.env` und `.env`
+4. `sharelatex` und `redis` starten wieder (Ausfall: Dauer des Archivierens, meist Sekunden bis Minuten)
+5. `archive-post`: Dump im Volume `mongo_dump` löschen
+
+Nicht gesichert werden `mongo_data` (Rohdateien einer laufenden DB sind kein verlässliches
+Backup – dafür gibt es den Dump) und `texlive` (jederzeit aus dem Image reproduzierbar).
+`overleaf.env` ist enthalten, weil ohne das alte `OVERLEAF_INVITE_TOKEN_SECRET` offene
+Einladungen ungültig werden.
+
+**Sofort sichern** (z. B. vor einem Update):
 
 ```bash
-docker compose stop sharelatex
-PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env | cut -d= -f2)
-mkdir -p backup
-for v in mongo_data sharelatex_data redis_data; do
-  docker run --rm -v ${PROJECT}_${v}:/data:ro -v "$PWD/backup":/backup alpine \
-    tar czf /backup/${v}-$(date +%F).tgz -C /data .
-done
-cp .env overleaf.env backup/
-docker compose start sharelatex
+docker compose exec backup backup
+ls -lh backup/
 ```
 
-`overleaf.env` gehört ins Backup: Ohne das alte `OVERLEAF_INVITE_TOKEN_SECRET` werden offene
-Einladungen ungültig.
+**Mehrere offen-Instanzen auf dem Host:** `BACKUP_LABEL` je Instanz eindeutig wählen. Labels
+und `EXEC_LABEL` hängen daran; mit gleichem Wert würden sich Instanzen gegenseitig Container
+stoppen oder Dumps auslösen.
+
+**Docker-Socket:** Der Backup-Container braucht ihn (nur lesend), um Container zu stoppen und
+`mongodump` per `docker exec` auszuführen. Overleaf selbst hat keinen Zugriff darauf.
+
+### Wiederherstellen
+
+Gilt für dieselbe Installation ebenso wie für einen neuen Host (dort zuerst Repository und
+Images bereitstellen).
+
+```bash
+cd overleaf
+ARCHIV=backup/overleaf-<zeitstempel>.tar.gz
+PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env | cut -d= -f2)
+
+# 1. Archiv entpacken (Inhalt liegt unter backup/<volume>/ bzw. backup/config/)
+rm -rf restore && mkdir restore && tar -xzf "$ARCHIV" -C restore
+ls restore/backup
+
+# 2. Konfiguration: bei neuem Host übernehmen, sonst nur vergleichen
+cp -n restore/backup/config/overleaf.env overleaf.env
+cp -n restore/backup/config/compose.env .env
+
+# 3. Nur MongoDB + Replica Set starten, Overleaf und Redis bleiben aus
+docker compose up -d mongo mongo-init
+docker compose stop sharelatex redis 2>/dev/null || true
+
+# 4. sharelatex_data und redis_data zurückspielen (Inhalt wird ersetzt!)
+for v in sharelatex_data redis_data; do
+  docker volume create ${PROJECT}_${v} >/dev/null
+  docker run --rm -v ${PROJECT}_${v}:/data -v "$PWD/restore/backup/$v":/src:ro alpine \
+    sh -c 'find /data -mindepth 1 -delete && cp -a /src/. /data/'
+done
+
+# 5. MongoDB aus dem Dump wiederherstellen (--drop ersetzt vorhandene Collections)
+docker compose cp restore/backup/mongo_dump/mongo.archive.gz mongo-init:/dump/mongo.archive.gz
+docker compose exec mongo-init mongorestore --uri="mongodb://mongo:27017/?directConnection=true" \
+  --oplogReplay --drop --gzip --archive=/dump/mongo.archive.gz
+docker compose exec mongo-init sh -c 'rm -f /dump/*'
+
+# 6. Alles starten
+docker compose up -d
+rm -rf restore
+```
+
+Danach prüfen: Login, Projekte vorhanden, Bilder sichtbar, Kompilieren. Das `texlive`-Volume
+wird bei Bedarf automatisch neu befüllt.
 
 Bei Problemen: [`../docs/troubleshooting.md`](../docs/troubleshooting.md).

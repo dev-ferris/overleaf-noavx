@@ -100,6 +100,33 @@ History. Existierte nie ein `user_files`, wurden nie Binärdateien hochgeladen.
 docker compose run --rm --entrypoint ls sharelatex -la /var/lib/overleaf/data/
 ```
 
+## Backup
+
+### `sharelatex` startet nicht, wartet auf `mongo-init`
+
+`mongo-init` wird erst *healthy*, wenn das Replica Set einen beschreibbaren Primary hat:
+
+```bash
+docker compose logs mongo-init
+```
+
+Endlos „MongoDB noch nicht bereit“ → `docker compose logs mongo` prüfen (Rechte, `Illegal instruction`).
+
+### Backup-Lauf schlägt fehl oder enthält keinen MongoDB-Dump
+
+```bash
+docker compose logs backup | tail -50
+docker compose exec backup backup                 # Lauf manuell auslösen
+```
+
+| Symptom | Ursache |
+|---|---|
+| `mongo_dump` im Archiv leer | `archive-pre` lief nicht: `EXEC_LABEL` und `docker-volume-backup.exec-label` an `mongo-init` müssen gleich sein (beide aus `BACKUP_LABEL`) |
+| `mongodump: not found` | `MONGOSH_IMAGE` ohne Database Tools – `alpine/mongosh` enthält sie |
+| `--oplog mode is only supported on replica sets` | Replica Set fehlt, siehe `mongo-init`-Log |
+| Overleaf wird von einer anderen Backup-Instanz gestoppt | `BACKUP_LABEL` nicht eindeutig |
+| Zeitplan um eine/zwei Stunden verschoben | `TZ` nicht gesetzt (Container-Standard: UTC) |
+
 ## MongoDB
 
 ### `Illegal instruction` / Exit-Code 132

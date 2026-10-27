@@ -10,6 +10,8 @@
 # Admin-Shell für MongoDB (das no-AVX-Image enthält kein mongosh):
 #   docker compose run --rm mongo-shell                         # interaktiv
 #   docker compose run --rm mongo-shell --quiet --eval 'db.version()'
+#
+# Backup: Service "backup" (offen/docker-volume-backup), täglich, MongoDB per mongodump.
 
 name: ${COMPOSE_PROJECT_NAME:-overleaf}
 
@@ -22,6 +24,9 @@ services:
     image: ${REDIS_IMAGE:-redis:7.4-alpine}
     volumes:
       - redis_data:/data
+    labels:
+      # Während des Backups stoppen; Redis schreibt beim Beenden einen konsistenten Snapshot
+      docker-volume-backup.stop-during-backup: ${BACKUP_LABEL:-overleaf}
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
@@ -46,25 +51,52 @@ services:
       timeout: 5s
       retries: 5
 
-  # Initialisiert das Replica Set einmalig (idempotent, beendet sich danach).
-  # Overleaf braucht ein Replica Set; der Hostname muss "mongo:27017" sein,
-  # sonst trägt MongoDB die Container-ID ein, die nach einem Neuerstellen nicht mehr stimmt.
+  # Initialisiert das Replica Set (idempotent) und bleibt danach laufen:
+  # - Overleaf startet erst, wenn ein beschreibbarer Primary existiert (Healthcheck).
+  #   Der Hostname muss "mongo:27017" sein, sonst trägt MongoDB die Container-ID ein,
+  #   die nach einem Neuerstellen nicht mehr stimmt.
+  # - Der laufende Container dient dem Backup als Ausführungsort für mongodump
+  #   (offen führt archive-pre/-post per "docker exec" aus, das braucht einen laufenden Container).
+  # MongoDB selbst wird für das Backup NICHT gestoppt: mongodump --oplog liefert auch im
+  # laufenden Betrieb einen konsistenten Stand; gesichert wird nur das Dump-Volume.
   mongo-init:
+    <<: *common
     image: ${MONGOSH_IMAGE:-alpine/mongosh:latest}
-    restart: "no"
     depends_on:
       mongo:
         condition: service_healthy
-    entrypoint: ["mongosh", "mongodb://mongo:27017/?directConnection=true", "--quiet", "--eval"]
+    volumes:
+      - mongo_dump:/dump
+    entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        try {
-          rs.status();
-          print("Replica Set bereits initialisiert");
-        } catch (e) {
-          rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
-          print("Replica Set initialisiert");
-        }
+        rm -f /tmp/rs-ready
+        until mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval '
+          try { rs.status() }
+          catch (e) {
+            rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
+            print("Replica Set initialisiert");
+          }
+          while (!db.hello().isWritablePrimary) { sleep(500) }
+          print("Replica Set bereit")'
+        do
+          echo "MongoDB noch nicht bereit, neuer Versuch in 5 s"; sleep 5
+        done
+        touch /tmp/rs-ready
+        exec sleep infinity
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/rs-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    labels:
+      docker-volume-backup.exec-label: ${BACKUP_LABEL:-overleaf}
+      docker-volume-backup.archive-pre: >-
+        /bin/sh -c 'rm -f /dump/* && mongodump --quiet
+        --uri="mongodb://mongo:27017/?directConnection=true"
+        --oplog --gzip --archive=/dump/mongo.archive.gz'
+      # nach dem Archivieren: Dump wieder entfernen
+      docker-volume-backup.archive-post: /bin/sh -c 'rm -f /dump/*'
 
   # Vollständiges TeX Live per Volume (kein Docker-Socket nötig).
   # Kopiert TeX Live aus dem texlive/texlive-Image ins Volume "texlive" und beendet sich.
@@ -105,7 +137,7 @@ services:
     env_file: overleaf.env
     depends_on:
       mongo-init:
-        condition: service_completed_successfully
+        condition: service_healthy
       redis:
         condition: service_healthy
       texlive-init:
@@ -127,12 +159,39 @@ services:
       - "${OVERLEAF_BIND:-8088}:80"
     labels:
       autoheal: "true"
+      # Während des Backups stoppen, damit sharelatex_data konsistent gesichert wird
+      docker-volume-backup.stop-during-backup: ${BACKUP_LABEL:-overleaf}
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost/status || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 180s
+
+  # Zeitgesteuertes Backup mit offen/docker-volume-backup.
+  # Ablauf je Lauf: mongodump (archive-pre in mongo-init) -> sharelatex + redis stoppen ->
+  # tar.gz der Volumes -> Container wieder starten -> Dump löschen (archive-post) -> Aufräumen.
+  # Braucht den Docker-Socket (nur lesend), um Container zu stoppen und Befehle auszuführen.
+  # NICHT gesichert: mongo_data (Rohdateien, stattdessen Dump) und texlive (reproduzierbar).
+  backup:
+    <<: *common
+    image: ${BACKUP_IMAGE:-offen/docker-volume-backup:v2}
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      BACKUP_CRON_EXPRESSION: ${BACKUP_CRON:-0 3 * * *}
+      BACKUP_FILENAME: overleaf-%Y-%m-%dT%H-%M-%S.{{ .Extension }}
+      BACKUP_PRUNING_PREFIX: "overleaf-"
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_STOP_DURING_BACKUP_LABEL: ${BACKUP_LABEL:-overleaf}
+      EXEC_LABEL: ${BACKUP_LABEL:-overleaf}
+    volumes:
+      - mongo_dump:/backup/mongo_dump:ro
+      - sharelatex_data:/backup/sharelatex_data:ro
+      - redis_data:/backup/redis_data:ro
+      - ./overleaf.env:/backup/config/overleaf.env:ro
+      - ./.env:/backup/config/compose.env:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${BACKUP_DIR:-./backup}:/archive
 
   mongo-shell:
     image: ${MONGOSH_IMAGE:-alpine/mongosh:latest}
@@ -145,4 +204,5 @@ volumes:
   texlive:
   sharelatex_data:
   mongo_data:
+  mongo_dump:
   redis_data:
