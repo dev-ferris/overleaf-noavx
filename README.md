@@ -52,7 +52,7 @@ Details: [`mongodb-noavx/README.md`](mongodb-noavx/README.md)
 cd overleaf
 cp .env.example .env && cp overleaf.env.example overleaf.env
 # OVERLEAF_SITE_URL, Secret (openssl rand -base64 32) usw. eintragen
-docker compose pull              # TeX Live ~5 GB
+docker compose pull              # TeX-Live-Image: mehrere GB
 docker compose up -d             # erster Start kopiert TeX Live ins Volume, einige Minuten
 ```
 

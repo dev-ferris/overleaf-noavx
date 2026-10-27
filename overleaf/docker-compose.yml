@@ -5,7 +5,7 @@
 #   docker compose up -d
 #
 # TeX Live: vollständig aus texlive/texlive, per Volume eingebunden (Service "texlive-init").
-# Der erste Start kopiert ~6 GB ins Volume und dauert einige Minuten.
+# Der erste Start kopiert mehrere GB ins Volume und dauert einige Minuten.
 #
 # MongoDB-Shell (das no-AVX-Image enthält kein mongosh, der Service mongo-shell schon):
 #   docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true"

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Probleme, die beim Aufsetzen tatsächlich aufgetreten sind, mit Ursache und Lösung.
+Typische Fehlerbilder mit Ursache und Lösung – die meisten sind beim Aufsetzen dieses Setups tatsächlich aufgetreten.
 
 ## Overleaf
 
@@ -46,7 +46,7 @@ docker compose logs texlive-init
 |---|---|
 | `kein TeX-Live-Jahrgang unter /usr/local/texlive` | `TEXLIVE_IMAGE` ist kein texlive/texlive-Image oder hat ein anderes Layout |
 | `latexmk fehlt` | Image ohne `latexmk` (z. B. `latest-minimal`) – `latest` verwenden |
-| `No space left on device` | Volume braucht ~8 GB zusätzlich zum Image |
+| `No space left on device` | Das Volume braucht etwa noch einmal so viel Platz wie das Image |
 
 Ein abgebrochener Kopiervorgang wird beim nächsten `docker compose up -d` automatisch
 wiederholt (der Marker wird erst am Ende geschrieben).
@@ -94,8 +94,8 @@ durchgereicht, siehe [`../overleaf/README.md`](../overleaf/README.md#https-über
 
 ### `user_files` existiert nach der Binary-File-Migration nicht mehr
 
-Erwartet: Schritt 5 benennt es in `old_user_files` um; mit Stufe 2 liegen die Dateien in der
-History. Existierte nie ein `user_files`, wurden nie Binärdateien hochgeladen.
+Erwartet: Schritt 5 der [Binary-File-Migration](migration-5.5-to-6.3.md#phase-1--binary-file-migration-overleaf-556-ext-mongodb-7)
+benennt es in `old_user_files` um; mit Stufe 2 liegen die Dateien in der History. Existierte nie ein `user_files`, wurden nie Binärdateien hochgeladen.
 
 ```bash
 docker compose run --rm --entrypoint ls sharelatex -la /var/lib/overleaf/data/
@@ -134,7 +134,7 @@ MONGO_UID=<uid> MONGO_GID=<gid> ./build.sh --skip-compile --save
 
 | Warnung | Bewertung |
 |---|---|
-| `glibc support for rseq ... GLIBC_TUNABLES=glibc.pthread.rseq=0` | Im Image bereits gesetzt; bei eigenem Image ergänzen |
+| `glibc support for rseq ... GLIBC_TUNABLES=glibc.pthread.rseq=0` | Im Compose gesetzt (und im aktuellen Dockerfile); bei eigenem Compose `GLIBC_TUNABLES` ergänzen |
 | `cache_size=15460M` o. ä. | `--wiredTigerCacheSizeGB` setzen, sonst nimmt MongoDB ~50 % RAM |
 | `Access control is not enabled` | Gewollt, solange Port 27017 nicht veröffentlicht ist |
 | `transparent_hugepage`, `swappiness` | Kernel-Einstellungen des Hosts, für Homelab unkritisch |
@@ -150,9 +150,6 @@ dass es dort weitergeht. Läuft trotz `JOBS=2` mehr als zwei Compiler gleichzeit
 
 ### `libatomic.so.1 => not found` beim Bau des Laufzeit-Images
 
-Im aktuellen Dockerfile behoben (`libatomic1`). Ohne neu zu kompilieren:
+Das Laufzeit-Image braucht `libatomic1`; im Dockerfile dieses Repositorys enthalten. Bei einem
+angepassten Dockerfile ergänzen und ohne neu zu kompilieren nachbauen:
 `./build.sh --skip-compile --save`.
-
-### `sed: 1: ...: invalid command code` auf macOS
-
-Alte Version von `build.sh` mit `sed -i`; die aktuelle ist mit BSD-sed kompatibel.

@@ -21,7 +21,7 @@ Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 - MongoDB-Image ohne AVX: Standard ist [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx)
   von Docker Hub (wird beim ersten `up` gezogen). Eigenbau siehe [`../mongodb-noavx`](../mongodb-noavx),
   bei CPU mit AVX stattdessen `MONGO_IMAGE=mongo:8.0`
-- Rund 15 GB freier Platz für TeX Live (Image ~5 GB komprimiert + Volume ~8 GB)
+- Rund 15 GB freier Platz für TeX Live: das Image und seine Kopie im Volume belegen jeweils mehrere GB
 
 ## Einrichtung
 
@@ -36,7 +36,7 @@ In `overleaf.env` anpassen: `OVERLEAF_SITE_URL` (exakt die Adresse im Browser, i
 `OVERLEAF_INVITE_TOKEN_SECRET`, `OVERLEAF_ADMIN_EMAIL`.
 
 ```bash
-docker compose pull                    # TeX Live ~5 GB, dauert
+docker compose pull                    # TeX-Live-Image: mehrere GB, dauert
 docker compose up -d
 docker compose logs -f texlive-init    # erster Start: kopiert TeX Live ins Volume, einige Minuten
 docker compose logs -f sharelatex      # danach: Migrationen, einige Minuten
@@ -66,8 +66,9 @@ Proxy (Caddy, Traefik, nginx …) davorsetzen:
 1. Proxy auf `http://<host>:8088` weiterleiten lassen. **WebSockets** müssen durchgereicht
    werden (Echtzeit-Editor); bei Caddy und Traefik passiert das automatisch, bei nginx
    `proxy_set_header Upgrade` / `Connection "upgrade"` setzen.
-2. Läuft der Proxy auf demselben Host: `OVERLEAF_BIND=127.0.0.1:8088` in `.env`, damit Overleaf
-   nicht zusätzlich unverschlüsselt im Netz erreichbar ist.
+2. Läuft der Proxy direkt auf demselben Host: `OVERLEAF_BIND=127.0.0.1:8088` in `.env`, damit
+   Overleaf nicht zusätzlich unverschlüsselt im Netz erreichbar ist. Läuft der Proxy selbst in
+   einem Container, erreicht er `127.0.0.1` des Hosts nicht – dann die LAN-IP des Hosts verwenden.
 3. In `overleaf.env`:
 
 ```env
@@ -124,7 +125,7 @@ docker compose exec sharelatex bash -c 'which latexmk; pdflatex --version | head
 ```
 
 **Platz sparen:** Nach dem Kopieren wird das Image nur noch für Updates gebraucht.
-`docker image rm texlive/texlive:latest` gibt ~5 GB frei; das nächste `docker compose up`
+`docker image rm texlive/texlive:latest` gibt mehrere GB frei; das nächste `docker compose up`
 zieht es dann allerdings erneut.
 
 **`-shell-escape`** (z. B. für `minted`): `TEX_COMPILER_EXTRA_FLAGS=-shell-escape` in
@@ -163,8 +164,9 @@ für einen konsistenten Stand), `sharelatex_data` bei gestopptem Overleaf. Nicht
 werden `mongo_data` (Rohdateien einer laufenden DB sind kein verlässliches Backup) und
 `texlive` (jederzeit aus dem Image reproduzierbar).
 
+Im Verzeichnis `overleaf/` ausführen:
+
 ```bash
-cd overleaf
 PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env | cut -d= -f2)
 ZIEL=backup/$(date +%F_%H%M) && mkdir -p "$ZIEL"
 
@@ -191,8 +193,11 @@ dauerhaft läuft, kann ein Backup-Werkzeug `mongodump` auch per `docker exec` da
 
 ### Wiederherstellen
 
+Im Verzeichnis `overleaf/` ausführen. Auf einem neuen Host zuerst die Konfiguration aus dem
+Backup übernehmen (`cp backup/<zeitstempel>/{.env,overleaf.env} .`) – sie enthält Projektname
+und `OVERLEAF_INVITE_TOKEN_SECRET`.
+
 ```bash
-cd overleaf
 QUELLE=backup/<zeitstempel>
 PROJECT=$(grep '^COMPOSE_PROJECT_NAME=' .env | cut -d= -f2)
 

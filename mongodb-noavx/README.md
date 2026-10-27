@@ -113,9 +113,10 @@ docker volume rm mongod-avx-bazel-cache
 ### AVX-Stichprobe
 
 `build.sh` zählt im fertigen Binary Befehle mit `ymm`/`zmm`-Registern und listet die
-betroffenen Funktionen. Einige wenige Treffer (beim Referenz-Build: 11) sind normal – das sind
-Codepfade, die zur Laufzeit per CPUID abgesichert sind. Der entscheidende Test ist der Start auf
-dem Zielsystem.
+betroffenen Funktionen. Beim Referenz-Build waren es 11; das Image startet und läuft im
+Referenz-Setup auf einer CPU ohne AVX. Solche vereinzelten Treffer sind typischerweise
+Codepfade, die zur Laufzeit per CPUID-Abfrage nur auf passenden CPUs genutzt werden. Der
+entscheidende Test bleibt der Betrieb auf dem Zielsystem.
 
 ## 3. Aufs NAS bringen und testen (Eigenbau)
 

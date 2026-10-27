@@ -6,7 +6,7 @@ Ausgangslage:
 |---|---|---|
 | Overleaf | `overleafcep/sharelatex:5.5.6-ext-v3.3` | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
 | MongoDB | `ghcr.io/fenio/mongodb-no-avx:7.0.28` | `devferris/mongodb-no-avx:8.0.17-nehalem` (oder Eigenbau) |
-| Redis | `valkey/valkey:9.2-alpine` | `redis:7.4-alpine` |
+| Redis | `valkey/valkey:9.2-alpine` | `redis:7.4-alpine` (oder Valkey beibehalten, siehe Phase 3) |
 | TeX Live | `texlive-init`-Volume (fester Jahrgang) | `texlive-init`-Volume mit Update-Erkennung und `PATH` |
 
 Overleaf 6 setzt voraus:
@@ -48,6 +48,14 @@ PROJECT=$(basename "$PWD")     # anpassen, falls der Präfix anders lautet
 ```bash
 docker compose run --rm mongo-shell --quiet --eval \
   'db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1})'
+```
+
+MongoDB lässt sich nur eine Hauptversion pro Schritt anheben. Steht dort `6.0`, zuerst noch
+mit dem 7.0-Image anheben:
+
+```bash
+docker compose run --rm mongo-shell --quiet --eval \
+  'db.adminCommand({setFeatureCompatibilityVersion: "7.0", confirm: true})'
 ```
 
 **Backup** im gestoppten Zustand:
@@ -191,6 +199,13 @@ docker compose run --rm mongo-shell --quiet --eval \
 
 ## Phase 3 – Redis vorbereiten
 
+Overleaf 6 verlangt offiziell Redis ≥ 7.4. Valkey 9.2 meldet sich als `redis_version:7.2.4`,
+unterstützt aber die benötigten Befehle. Zwei Wege:
+
+- **Valkey beibehalten:** In Phase 4 `REDIS_IMAGE=valkey/valkey:9.2-alpine` in `.env` setzen;
+  das bestehende Volume wird weiterverwendet. Diese Phase entfällt.
+- **Auf Redis 7.4 wechseln** (offiziell unterstützt): wie folgt.
+
 Redis enthält nur Queues und Sessions. Nach geleerten Queues kann Redis 7.4 leer starten;
 das Valkey-9-Volume wird verworfen (Redis 7.4 kann Valkey-9-Dumps nicht sicher lesen).
 
@@ -218,14 +233,16 @@ cp overleaf.env.example overleaf.env
 
 - `COMPOSE_PROJECT_NAME` = **alter Präfix** (`$PROJECT` aus Phase 0). Sonst legt Compose
   neue, leere Volumes an und Overleaf startet wie eine Neuinstallation.
-- `MONGO_IMAGE`, `OVERLEAF_BIND` anpassen.
+- `MONGO_IMAGE`, `OVERLEAF_BIND` anpassen; bei Valkey zusätzlich `REDIS_IMAGE` (siehe Phase 3).
 - Das Compose enthält keinen Reverse Proxy mehr. Lief Overleaf bisher hinter Caddy
   (Labels), den Proxy auf den veröffentlichten Port umstellen, siehe
   [`../overleaf/README.md`](../overleaf/README.md#https-über-einen-reverse-proxy-optional).
   `OVERLEAF_SITE_URL` und `OVERLEAF_SECURE_COOKIE` entsprechend übernehmen.
 
 **`overleaf.env`:** Werte aus der alten `.env` übernehmen (`OVERLEAF_SITE_URL`, App-Name,
-Template-Galerie …) und ergänzen:
+Template-Galerie …). Nicht übernehmen: `OVERLEAF_MONGO_URL`/`REDIS_HOST` (setzt das Compose)
+sowie Variablen mit dem Wert `false` – manche wirken schon, wenn sie gesetzt sind (siehe
+Kommentar in `overleaf.env.example`). Ergänzen:
 
 ```env
 OVERLEAF_INVITE_TOKEN_SECRET=<openssl rand -base64 32>
@@ -243,7 +260,7 @@ zum Overleaf-Image passen muss (das war beim alten Setup die Fehlerquelle). Deta
 
 ```bash
 docker volume ls | grep "^local *${PROJECT}_"     # mongo_data und sharelatex_data müssen auftauchen
-docker compose pull                                # TeX Live ~5 GB, dauert
+docker compose pull                                # TeX-Live-Image: mehrere GB, dauert
 docker compose up -d
 docker compose logs -f texlive-init                # kopiert TeX Live ins Volume, einige Minuten
 docker compose logs -f sharelatex
