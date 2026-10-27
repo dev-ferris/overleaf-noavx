@@ -7,9 +7,9 @@
 # TeX Live: vollständig aus texlive/texlive, per Volume eingebunden (Service "texlive-init").
 # Der erste Start kopiert ~6 GB ins Volume und dauert einige Minuten.
 #
-# Admin-Shell für MongoDB (das no-AVX-Image enthält kein mongosh):
-#   docker compose run --rm mongo-shell                         # interaktiv
-#   docker compose run --rm mongo-shell --quiet --eval 'db.version()'
+# Admin-Shell für MongoDB (das no-AVX-Image enthält kein mongosh, mongo-init schon):
+#   docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true"   # interaktiv
+#   docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval 'db.version()'
 #
 # Backup: Service "backup" (offen/docker-volume-backup), täglich, MongoDB per mongodump.
 
@@ -192,13 +192,6 @@ services:
       - ./.env:/backup/config/compose.env:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ${BACKUP_DIR:-./backup}:/archive
-
-  mongo-shell:
-    image: ${MONGOSH_IMAGE:-alpine/mongosh:latest}
-    profiles: ["tools"]
-    entrypoint: ["mongosh", "mongodb://mongo:27017/?directConnection=true"]
-    depends_on:
-      - mongo
 
 volumes:
   texlive:

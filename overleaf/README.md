@@ -12,7 +12,7 @@ Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 
 | Datei | Zweck |
 |---|---|
-| `docker-compose.yml` | Redis, MongoDB, Replica-Set-Init, TeX-Live-Volume, Overleaf, Backup, mongosh-Werkzeug |
+| `docker-compose.yml` | Redis, MongoDB, Replica-Set-Init (zugleich mongosh-Shell), TeX-Live-Volume, Overleaf, Backup |
 | `.env.example` | Compose-Variablen: Images, Port, Projektname, Backup-Zeitplan |
 | `overleaf.env.example` | Overleaf-Konfiguration inkl. Secrets |
 
@@ -44,7 +44,7 @@ docker compose logs -f sharelatex      # danach: Migrationen, einige Minuten
 
 Die Startreihenfolge erzwingt Compose: `mongo` (healthy) → `mongo-init` (Replica Set mit
 Primary, healthy) → `redis` (healthy) → `texlive-init` (TeX Live im Volume) → `sharelatex`.
-`mongo-init` läuft danach weiter, weil das Backup darin `mongodump` ausführt.
+`mongo-init` läuft danach weiter: Das Backup führt darin `mongodump` aus, und es dient als MongoDB-Shell.
 
 ### Ersten Administrator anlegen
 
@@ -143,16 +143,16 @@ verwendet. Siehe [CEP-Wiki: Sandboxed Compiles](https://github.com/yu-i-i/overle
 **MongoDB-Shell:**
 
 ```bash
-docker compose run --rm mongo-shell                                   # interaktiv
-docker compose run --rm mongo-shell --quiet --eval 'rs.status().members.map(m => m.stateStr)'
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true"   # interaktiv
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval 'rs.status().members.map(m => m.stateStr)'
 ```
 
 **Admins anzeigen / setzen / entziehen:**
 
 ```bash
-docker compose run --rm mongo-shell --quiet --eval \
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'db.getSiblingDB("sharelatex").users.find({isAdmin: true}, {email: 1}).toArray()'
-docker compose run --rm mongo-shell --quiet --eval \
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'db.getSiblingDB("sharelatex").users.updateOne({email: "du@example.com"}, {$set: {isAdmin: true}})'
 ```
 

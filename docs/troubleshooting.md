@@ -64,23 +64,24 @@ Meist ist das Replica Set nicht initialisiert oder mit falschem Hostnamen einget
 (Container-ID statt `mongo:27017`):
 
 ```bash
-docker compose run --rm mongo-shell --quiet --eval 'rs.conf().members.map(m => m.host)'
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval 'rs.conf().members.map(m => m.host)'
 ```
 
 Falschen Host korrigieren:
 
 ```bash
-docker compose run --rm mongo-shell --quiet --eval \
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'c = rs.conf(); c.members[0].host = "mongo:27017"; rs.reconfig(c, {force: true})'
 ```
 
 ### `rs.initiate(...)`: „bash: syntax error near unexpected token“
 
 Der Befehl ist JavaScript und gehört in `mongosh`, nicht in die Bash des Containers.
-Das no-AVX-Image enthält kein mongosh – über den `mongo-shell`-Service ausführen:
+Das no-AVX-Image enthält kein mongosh – über den Container `mongo-init` ausführen
+(im Compose aus diesem Repository erledigt `mongo-init` das ohnehin automatisch):
 
 ```bash
-docker compose run --rm mongo-shell --quiet --eval \
+docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})'
 ```
 
