@@ -45,7 +45,7 @@ docker compose logs texlive-init
 | Meldung | Ursache |
 |---|---|
 | `kein TeX-Live-Jahrgang unter /usr/local/texlive` | `TEXLIVE_IMAGE` ist kein texlive/texlive-Image oder hat ein anderes Layout |
-| `latexmk fehlt` | Image ohne `latexmk` (z. B. `latest-minimal`) – `latest-full` verwenden |
+| `latexmk fehlt` | Image ohne `latexmk` (z. B. `latest-minimal`) – `latest` verwenden |
 | `No space left on device` | Volume braucht ~8 GB zusätzlich zum Image |
 
 Ein abgebrochener Kopiervorgang wird beim nächsten `docker compose up -d` automatisch
@@ -64,24 +64,24 @@ Meist ist das Replica Set nicht initialisiert oder mit falschem Hostnamen einget
 (Container-ID statt `mongo:27017`):
 
 ```bash
-docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval 'rs.conf().members.map(m => m.host)'
+docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval 'rs.conf().members.map(m => m.host)'
 ```
 
 Falschen Host korrigieren:
 
 ```bash
-docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
+docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'c = rs.conf(); c.members[0].host = "mongo:27017"; rs.reconfig(c, {force: true})'
 ```
 
 ### `rs.initiate(...)`: „bash: syntax error near unexpected token“
 
 Der Befehl ist JavaScript und gehört in `mongosh`, nicht in die Bash des Containers.
-Das no-AVX-Image enthält kein mongosh – über den Container `mongo-init` ausführen
-(im Compose aus diesem Repository erledigt `mongo-init` das ohnehin automatisch):
+Das no-AVX-Image enthält kein mongosh – über den Container `mongo-shell` ausführen
+(im Compose aus diesem Repository erledigt `mongo-shell` das beim Start ohnehin automatisch):
 
 ```bash
-docker compose exec mongo-init mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
+docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})'
 ```
 
@@ -101,34 +101,19 @@ History. Existierte nie ein `user_files`, wurden nie Binärdateien hochgeladen.
 docker compose run --rm --entrypoint ls sharelatex -la /var/lib/overleaf/data/
 ```
 
-## Backup
-
-### `sharelatex` startet nicht, wartet auf `mongo-init`
-
-`mongo-init` wird erst *healthy*, wenn das Replica Set einen beschreibbaren Primary hat:
-
-```bash
-docker compose logs mongo-init
-```
-
-Endlos „MongoDB noch nicht bereit“ → `docker compose logs mongo` prüfen (Rechte, `Illegal instruction`).
-
-### Backup-Lauf schlägt fehl oder enthält keinen MongoDB-Dump
-
-```bash
-docker compose logs backup | tail -50
-docker compose exec backup backup                 # Lauf manuell auslösen
-```
-
-| Symptom | Ursache |
-|---|---|
-| `mongo_dump` im Archiv leer | `archive-pre` lief nicht: `EXEC_LABEL` und `docker-volume-backup.exec-label` an `mongo-init` müssen gleich sein (beide aus `BACKUP_LABEL`) |
-| `mongodump: not found` | `MONGOSH_IMAGE` ohne Database Tools – `alpine/mongosh` enthält sie |
-| `--oplog mode is only supported on replica sets` | Replica Set fehlt, siehe `mongo-init`-Log |
-| Overleaf wird von einer anderen Backup-Instanz gestoppt | `BACKUP_LABEL` nicht eindeutig |
-| Zeitplan um eine/zwei Stunden verschoben | `TZ` nicht gesetzt (Container-Standard: UTC) |
-
 ## MongoDB
+
+### `sharelatex` startet nicht, wartet auf `mongo-shell`
+
+`mongo-shell` wird erst *healthy*, wenn das Replica Set einen beschreibbaren Primary hat:
+
+```bash
+docker compose logs mongo-shell
+```
+
+Bricht `mongo-shell` ab, weil MongoDB beim Start noch nicht erreichbar war, startet
+`restart: unless-stopped` es neu. Bleibt es dauerhaft ungesund: `docker compose logs mongo`
+prüfen (Rechte, `Illegal instruction`).
 
 ### `Illegal instruction` / Exit-Code 132
 

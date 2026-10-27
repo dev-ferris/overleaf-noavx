@@ -10,7 +10,7 @@ Dieses Repository enthält alles, um das zu umgehen:
 | Verzeichnis | Inhalt |
 |---|---|
 | [`mongodb-noavx/`](mongodb-noavx) | Build von MongoDB 8.0 ohne AVX als Docker-Image |
-| [`overleaf/`](overleaf) | Docker-Compose-Setup für Overleaf CEP 6.x mit vollständigem TeX Live und automatischem Backup |
+| [`overleaf/`](overleaf) | Docker-Compose-Setup für Overleaf CEP 6.x mit vollständigem TeX Live |
 | [`docs/migration-5.5-to-6.3.md`](docs/migration-5.5-to-6.3.md) | Upgrade von Overleaf 5.5 + MongoDB 7 auf 6.3 + MongoDB 8 |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Fehlerbilder und Lösungen |
 
@@ -68,8 +68,7 @@ Details: [`overleaf/README.md`](overleaf/README.md)
 | Overleaf | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
 | MongoDB | [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx) – 8.0.17, `-march=nehalem`, Build über [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
 | Redis | 7.4 |
-| TeX Live | `texlive/texlive:latest-full`, per Volume eingebunden |
-| Backup | `offen/docker-volume-backup:v2`, MongoDB per `mongodump --oplog` |
+| TeX Live | `texlive/texlive:latest`, per Volume eingebunden |
 | Build-Host | Intel-Mac, Docker Desktop, 12 GB VM |
 
 ## Hinweise

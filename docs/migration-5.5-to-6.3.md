@@ -250,14 +250,9 @@ docker compose logs -f sharelatex
 ```
 
 Beim ersten Start laufen die Datenbank-Migrationen von 5.5 auf 6.3; das dauert einige Minuten.
-`mongo-init` meldet „Replica Set bereit“ (ohne vorheriges „initialisiert“, da das Replica Set
-aus dem bestehenden Volume übernommen wird).
-
-**Backup:** Das neue Compose bringt einen eigenen `backup`-Service mit (offen/docker-volume-backup,
-`mongodump` über `mongo-init`). Lief bisher eine eigene offen-Instanz mit Hooks an einem
-`mongo-shell`-Container, diese entfernen oder `BACKUP_LABEL` in `.env` auf den bisherigen
-Label-Wert setzen (z. B. `latex`) und die alte Instanz abschalten – sonst laufen zwei Backups
-mit denselben Labels. Siehe [`../overleaf/README.md`](../overleaf/README.md#backup).
+`mongo-shell` meldet „Replica Set bereits initialisiert“ und „Replica Set bereit“ – das
+Replica Set wird aus dem bestehenden Volume übernommen. Hat das alte Compose einen
+gleichnamigen `mongo-shell`-Service (z. B. mit `sleep infinity`), ersetzt ihn der neue.
 
 **Prüfen:** Login, bestehendes Projekt öffnen, Bilder sichtbar, kompilieren (auch ein
 KOMA-Script-Brief mit `scrlttr2`), History öffnen, Einladung an einen zweiten Nutzer.
