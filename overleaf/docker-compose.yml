@@ -30,9 +30,13 @@ services:
 
   mongo:
     <<: *common
-    # Selbst gebautes MongoDB 8.0 ohne AVX, siehe ../mongodb-noavx
-    image: ${MONGO_IMAGE:-mongodb-no-avx:8.0.17-nehalem}
+    # MongoDB 8.0 ohne AVX (Docker Hub), Eigenbau siehe ../mongodb-noavx
+    image: ${MONGO_IMAGE:-devferris/mongodb-no-avx:8.0.17-nehalem}
     command: "--replSet rs0 --bind_ip_all --wiredTigerCacheSizeGB ${MONGO_CACHE_GB:-1}"
+    environment:
+      # tcmalloc in MongoDB 8 verträgt sich nicht mit glibc-rseq (Performance).
+      # Im aktuellen Dockerfile gesetzt, hier zusätzlich für ältere Image-Builds.
+      GLIBC_TUNABLES: glibc.pthread.rseq=0
     volumes:
       - mongo_data:/data/db
     healthcheck:

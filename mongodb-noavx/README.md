@@ -14,6 +14,23 @@ fortsetzbaren Build und ein schlankes Laufzeit-Image.
 | `build.sh` | Kompiliert `mongod` (oder übernimmt ein vorhandenes) und baut das Laufzeit-Image |
 | `Dockerfile` | Laufzeit-Image: Ubuntu Noble, Entrypoint `mongod`, User `mongodb`, `/data/db` |
 
+## Fertiges Image
+
+Wer nicht selbst bauen will: [`devferris/mongodb-no-avx`](https://hub.docker.com/r/devferris/mongodb-no-avx)
+auf Docker Hub, gebaut mit diesem Verzeichnis.
+
+| Tag | MongoDB | `CPU_ARCH` | UID/GID `mongodb` |
+|---|---|---|---|
+| `8.0.17-nehalem` | 8.0.17 | `nehalem` (SSE4.2 + POPCNT, kein AVX) | 999/999 |
+
+```bash
+docker pull devferris/mongodb-no-avx:8.0.17-nehalem
+docker run --rm devferris/mongodb-no-avx:8.0.17-nehalem --version
+```
+
+Selbst bauen ist nötig für CPUs ohne SSE4.2 (`core2`), für eine abweichende UID
+(bestehendes Volume mit anderem Besitzer) oder für eine neuere MongoDB-Version.
+
 Das Image verhält sich wie [`ghcr.io/fenio/mongodb-no-avx`](https://github.com/fenio/mongodb-no-avx)
 (MongoDB 7.0 ohne AVX), ist also ein Drop-in-Ersatz: `command: "--replSet rs0 ..."` bleibt gleich.
 
@@ -100,7 +117,7 @@ betroffenen Funktionen. Einige wenige Treffer (beim Referenz-Build: 11) sind nor
 Codepfade, die zur Laufzeit per CPUID abgesichert sind. Der entscheidende Test ist der Start auf
 dem Zielsystem.
 
-## 3. Aufs NAS bringen und testen
+## 3. Aufs NAS bringen und testen (Eigenbau)
 
 Per Datei:
 

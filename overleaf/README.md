@@ -18,8 +18,9 @@ Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 
 ## Voraussetzungen
 
-- MongoDB-Image ohne AVX gebaut und auf dem Host geladen, siehe [`../mongodb-noavx`](../mongodb-noavx)
-  (bei CPU mit AVX stattdessen `MONGO_IMAGE=mongo:8.0`)
+- MongoDB-Image ohne AVX: Standard ist [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx)
+  von Docker Hub (wird beim ersten `up` gezogen). Eigenbau siehe [`../mongodb-noavx`](../mongodb-noavx),
+  bei CPU mit AVX stattdessen `MONGO_IMAGE=mongo:8.0`
 - caddy-docker-proxy läuft, sein Netzwerk existiert (`docker network ls`)
 - DNS-Eintrag für den Hostnamen zeigt auf den Host
 

@@ -25,7 +25,18 @@ grep -o -w avx /proc/cpuinfo | head -1
 Ausgabe `avx` → offizielles `mongo:8.0` verwenden und direkt bei Schritt 3 weitermachen
 (`MONGO_IMAGE=mongo:8.0` in `overleaf/.env`).
 
-**2. MongoDB ohne AVX bauen** – auf einem kräftigen x86_64-Rechner, dauert Stunden:
+**2. MongoDB-Image ohne AVX besorgen**
+
+Fertiges Image auf Docker Hub – für CPUs mit SSE4.2/POPCNT, aber ohne AVX (`nehalem`):
+
+```bash
+docker pull devferris/mongodb-no-avx:8.0.17-nehalem
+docker run --rm devferris/mongodb-no-avx:8.0.17-nehalem --version     # Smoke-Test auf dem Zielsystem
+```
+
+Das ist der Standard in `overleaf/docker-compose.yml`. Startet es mit `Illegal instruction`,
+oder willst du selbst bauen (`core2`, eigene UID, neuere Version), dann auf einem kräftigen
+x86_64-Rechner – dauert Stunden:
 
 ```bash
 cd mongodb-noavx
@@ -54,7 +65,7 @@ Details: [`overleaf/README.md`](overleaf/README.md)
 | Komponente | Version |
 |---|---|
 | Overleaf | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
-| MongoDB | 8.0.17, `-march=nehalem`, Build über [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
+| MongoDB | [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx) – 8.0.17, `-march=nehalem`, Build über [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
 | Redis | 7.4 |
 | Reverse Proxy | caddy-docker-proxy |
 | Build-Host | Intel-Mac, Docker Desktop, 12 GB VM |

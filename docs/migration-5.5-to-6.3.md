@@ -5,7 +5,7 @@ Ausgangslage:
 | Komponente | Vorher | Nachher |
 |---|---|---|
 | Overleaf | `overleafcep/sharelatex:5.5.6-ext-v3.3` | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
-| MongoDB | `ghcr.io/fenio/mongodb-no-avx:7.0.28` | `mongodb-no-avx:8.0.17-nehalem` (Eigenbau) |
+| MongoDB | `ghcr.io/fenio/mongodb-no-avx:7.0.28` | `devferris/mongodb-no-avx:8.0.17-nehalem` (oder Eigenbau) |
 | Redis | `valkey/valkey:9.2-alpine` | `redis:7.4-alpine` |
 | TeX Live | `texlive-init`-Volume | Sandboxed Compiles oder eigenes Image |
 
@@ -138,7 +138,17 @@ Projekt mit Bildern öffnen: Bilder sichtbar, Projekt kompiliert → Migration e
 
 ## Phase 2 – MongoDB 7 → 8
 
-Image bauen und laden: [`../mongodb-noavx`](../mongodb-noavx).
+Image ziehen und testen:
+
+```bash
+docker pull devferris/mongodb-no-avx:8.0.17-nehalem
+docker run --rm devferris/mongodb-no-avx:8.0.17-nehalem --version
+```
+
+Alternativ selbst bauen: [`../mongodb-noavx`](../mongodb-noavx). Die UID des `mongodb`-Users
+im fertigen Image ist 999 – mit dem alten Image vergleichen
+(`docker run --rm --entrypoint id ghcr.io/fenio/mongodb-no-avx:7.0.28`); weicht sie ab,
+selbst bauen mit passender `MONGO_UID`/`MONGO_GID`.
 
 ```bash
 docker compose stop sharelatex
@@ -148,8 +158,10 @@ Im alten Compose nur das Image des `mongo`-Service tauschen – Volume und `--re
 
 ```yaml
   mongo:
-    image: mongodb-no-avx:8.0.17-nehalem
+    image: devferris/mongodb-no-avx:8.0.17-nehalem
     command: "--replSet rs0 --bind_ip_all --wiredTigerCacheSizeGB 1"
+    environment:
+      GLIBC_TUNABLES: glibc.pthread.rseq=0
 ```
 
 ```bash
