@@ -1,0 +1,73 @@
+# Spiegelt das MongoDB-no-AVX-Image von Docker Hub in die GitHub Container Registry.
+#
+# Auslösen: Actions -> "MongoDB-Image nach GHCR spiegeln" -> "Run workflow"
+# Ergebnis: ghcr.io/<owner>/mongodb-no-avx:<tag>
+#
+# Das Image wird unverändert übernommen (gleiche Layer, gleicher Inhalt). Authentifizierung
+# an ghcr.io über das automatische GITHUB_TOKEN dieses Repositorys, keine Secrets nötig.
+
+name: MongoDB-Image nach GHCR spiegeln
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag auf Docker Hub (devferris/mongodb-no-avx:<tag>)"
+        required: true
+        default: "8.0.17-nehalem"
+      latest:
+        description: "Zusätzlich als :latest taggen"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE: docker.io/devferris/mongodb-no-avx
+    steps:
+      - name: Bei ghcr.io anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ziel bestimmen
+        id: target
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${owner}/mongodb-no-avx" >> "$GITHUB_OUTPUT"
+
+      - name: Image ziehen
+        run: docker pull "${SOURCE}:${{ inputs.tag }}"
+
+      - name: Prüfen (Version)
+        run: docker run --rm "${SOURCE}:${{ inputs.tag }}" --version
+
+      - name: Taggen und pushen
+        env:
+          TARGET: ${{ steps.target.outputs.image }}
+        run: |
+          docker tag "${SOURCE}:${{ inputs.tag }}" "${TARGET}:${{ inputs.tag }}"
+          docker push "${TARGET}:${{ inputs.tag }}"
+          if [ "${{ inputs.latest }}" = "true" ]; then
+            docker tag "${SOURCE}:${{ inputs.tag }}" "${TARGET}:latest"
+            docker push "${TARGET}:latest"
+          fi
+
+      - name: Zusammenfassung
+        env:
+          TARGET: ${{ steps.target.outputs.image }}
+        run: |
+          {
+            echo "### Gespiegelt"
+            echo ""
+            echo "\`${SOURCE}:${{ inputs.tag }}\` → \`${TARGET}:${{ inputs.tag }}\`"
+            echo ""
+            echo "Digest: \`$(docker inspect --format '{{index .RepoDigests 0}}' "${TARGET}:${{ inputs.tag }}" 2>/dev/null || echo n/a)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
