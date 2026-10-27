@@ -52,9 +52,8 @@ Details: [`mongodb-noavx/README.md`](mongodb-noavx/README.md)
 cd overleaf
 cp .env.example .env && cp overleaf.env.example overleaf.env
 # Hostname, Secret (openssl rand -base64 32) usw. eintragen
-docker compose up --no-start     # Volumes anlegen, Images ziehen (TeX Live ~5 GB)
-# OVERLEAF_HOST_DATA_DIR in .env mit "docker volume inspect" abgleichen (siehe overleaf/README.md)
-docker compose up -d
+docker compose pull              # TeX Live ~5 GB
+docker compose up -d             # erster Start kopiert TeX Live ins Volume, einige Minuten
 ```
 
 Danach `https://<hostname>/launchpad` für den ersten Admin.
@@ -69,7 +68,7 @@ Details: [`overleaf/README.md`](overleaf/README.md)
 | Overleaf | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
 | MongoDB | [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx) – 8.0.17, `-march=nehalem`, Build über [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
 | Redis | 7.4 |
-| TeX Live | `texlive/texlive:latest-full` über Sandboxed Compiles |
+| TeX Live | `texlive/texlive:latest-full`, per Volume eingebunden |
 | Reverse Proxy | caddy-docker-proxy |
 | Build-Host | Intel-Mac, Docker Desktop, 12 GB VM |
 
@@ -77,8 +76,8 @@ Details: [`overleaf/README.md`](overleaf/README.md)
 
 - Der MongoDB-Build ist inoffiziell und von MongoDB weder getestet noch unterstützt.
   Regelmäßige Backups sind Pflicht.
-- Overleaf Community Edition ist für Umgebungen mit vertrauenswürdigen Nutzern gedacht.
-  Sandboxed Compiles geben Overleaf Zugriff auf den Docker-Socket.
+- Overleaf Community Edition ist für Umgebungen mit vertrauenswürdigen Nutzern gedacht:
+  LaTeX wird ohne Sandbox direkt im Overleaf-Container kompiliert.
 - MongoDB steht unter der SSPL, Overleaf unter der AGPLv3.
 
 ## Danksagung

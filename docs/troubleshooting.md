@@ -23,39 +23,40 @@ nie mehr ändern (sonst werden offene Einladungen ungültig). Nicht dynamisch im
 
 ### `LaTeX Error: File 'scrlttr2.cls' not found`
 
-Das Overleaf-Image enthält nur ein minimales TeX Live ohne KOMA-Script. Tritt der Fehler
-auf, sind Sandboxed Compiles nicht aktiv – mit dem Compose aus diesem Repository kompiliert
-Overleaf in `texlive/texlive:latest-full`, siehe [`../overleaf/README.md`](../overleaf/README.md#tex-live).
+Overleaf kompiliert mit dem minimalen TeX Live des Images statt mit dem Volume. Prüfen:
+
+```bash
+docker compose exec sharelatex bash -c 'which latexmk; kpsewhich scrlttr2.cls'
+```
+
+Erwartet: `/usr/local/texlive/current/bin/x86_64-linux/latexmk` und ein Pfad zu `scrlttr2.cls`.
+Zeigt `which` auf `/usr/local/bin/...`, fehlt die `PATH`-Variable im Service `sharelatex` oder
+das Volume `texlive` ist nicht eingebunden. Nach Änderungen
+`docker compose up -d --force-recreate sharelatex`.
+
 `tlmgr install` im laufenden Overleaf-Container ist keine Lösung – beim Neuerstellen ist das Paket weg.
 
-### Kompilieren schlägt fehl, seit Sandboxed Compiles aktiv sind
-
-Fast immer stimmt `OVERLEAF_HOST_DATA_DIR` nicht: Der Docker-Daemon des Hosts kann die
-Projektdateien dann nicht in den Compile-Container mounten (leere Ausgabe, „No PDF“,
-Fehler zu `/compile`). Prüfen und in `.env` korrigieren:
+### `texlive-init` bricht ab, `sharelatex` startet nicht
 
 ```bash
-docker volume inspect -f '{{.Mountpoint}}' <projekt>_sharelatex_data
-docker compose up -d --force-recreate sharelatex
+docker compose logs texlive-init
 ```
 
-Weitere Ursachen: TeX-Live-Image nicht geladen (`docker images texlive/texlive`), Socket nicht
-gemountet, oder Docker läuft rootless bzw. in einer VM (Docker Desktop) – dann stimmen
-Host-Pfade aus Sicht des Daemons nicht mit denen der Shell überein. Diagnose:
+| Meldung | Ursache |
+|---|---|
+| `kein TeX-Live-Jahrgang unter /usr/local/texlive` | `TEXLIVE_IMAGE` ist kein texlive/texlive-Image oder hat ein anderes Layout |
+| `latexmk fehlt` | Image ohne `latexmk` (z. B. `latest-minimal`) – `latest-full` verwenden |
+| `No space left on device` | Volume braucht ~8 GB zusätzlich zum Image |
 
-```bash
-docker compose logs sharelatex | grep -iE 'clsi|docker|sandbox' | tail -30
-```
+Ein abgebrochener Kopiervorgang wird beim nächsten `docker compose up -d` automatisch
+wiederholt (der Marker wird erst am Ende geschrieben).
 
-### `pdflatex` nicht gefunden nach Upgrade
+### `pdflatex` nicht gefunden
 
-Ein eingebundenes TeX-Live-Volume (`/usr/local/texlive`) passt nicht zum Jahrgang des neuen
-Images. Die Symlinks in `/usr/local/bin` zeigen ins Leere. Volume entfernen oder zum Jahrgang
-passend neu befüllen:
-
-```bash
-docker run --rm --entrypoint ls <overleaf-image> /usr/local/texlive
-```
+Klassischer Fehler beim alten Setup: Ein TeX-Live-Volume aus einem anderen Jahrgang liegt
+über `/usr/local/texlive`, die Symlinks des Overleaf-Images in `/usr/local/bin` zeigen ins
+Leere. Mit diesem Compose verhindert das der `PATH` auf `current`. Tritt es trotzdem auf:
+`PATH` im Service `sharelatex` prüfen (`docker compose config | grep PATH`).
 
 ### Overleaf hängt beim Start, Log zeigt Mongo-Timeouts
 

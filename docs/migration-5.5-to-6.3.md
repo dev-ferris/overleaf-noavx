@@ -7,7 +7,7 @@ Ausgangslage:
 | Overleaf | `overleafcep/sharelatex:5.5.6-ext-v3.3` | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
 | MongoDB | `ghcr.io/fenio/mongodb-no-avx:7.0.28` | `devferris/mongodb-no-avx:8.0.17-nehalem` (oder Eigenbau) |
 | Redis | `valkey/valkey:9.2-alpine` | `redis:7.4-alpine` |
-| TeX Live | `texlive-init`-Volume | Sandboxed Compiles mit `texlive/texlive:latest-full` |
+| TeX Live | `texlive-init`-Volume (fester Jahrgang) | `texlive-init`-Volume mit Update-Erkennung und `PATH` |
 
 Overleaf 6 setzt voraus:
 
@@ -228,18 +228,12 @@ OVERLEAF_INVITE_TOKEN_SECRET=<openssl rand -base64 32>
 OVERLEAF_FILESTORE_MIGRATION_LEVEL=2
 ```
 
-**TeX Live:** Das alte `texlive-init`-Volume wird nicht mehr eingebunden – Overleaf 6.3 basiert
-auf einem neueren TeX-Live-Jahrgang, ein altes Volume würde die Symlinks im Image brechen
-(`pdflatex` nicht gefunden). Das neue Compose kompiliert stattdessen über Sandboxed Compiles
-mit vollständigem TeX Live, siehe [`../overleaf/README.md`](../overleaf/README.md#tex-live).
-Dafür muss `OVERLEAF_HOST_DATA_DIR` in `.env` auf das **bestehende** Datenvolume zeigen:
-
-```bash
-docker volume inspect -f '{{.Mountpoint}}' ${PROJECT}_sharelatex_data
-```
-
-Bestehende Projekte bekommen beim ersten Öffnen automatisch das Standard-Image
-(`TEX_LIVE_DOCKER_IMAGE`) zugewiesen.
+**TeX Live:** Das neue Compose verwendet wieder ein Volume namens `texlive` – bei gleichem
+Projektnamen also das **bestehende** `${PROJECT}_texlive`. Das alte Volume hat keinen Marker;
+`texlive-init` erkennt das, leert es und kopiert den aktuellen Jahrgang hinein. Zusätzlich
+setzt das Compose `PATH` auf `/usr/local/texlive/current/...`, sodass der Jahrgang nicht mehr
+zum Overleaf-Image passen muss (das war beim alten Setup die Fehlerquelle). Details:
+[`../overleaf/README.md`](../overleaf/README.md#tex-live).
 
 **Starten:**
 
@@ -247,6 +241,7 @@ Bestehende Projekte bekommen beim ersten Öffnen automatisch das Standard-Image
 docker volume ls | grep "^local *${PROJECT}_"     # mongo_data und sharelatex_data müssen auftauchen
 docker compose pull                                # TeX Live ~5 GB, dauert
 docker compose up -d
+docker compose logs -f texlive-init                # kopiert TeX Live ins Volume, einige Minuten
 docker compose logs -f sharelatex
 ```
 
@@ -262,7 +257,6 @@ KOMA-Script-Brief mit `scrlttr2`), History öffnen, Einladung an einen zweiten N
 
 ```bash
 docker compose run --rm --entrypoint rm sharelatex -rf /var/lib/overleaf/data/old_user_files
-docker volume rm ${PROJECT}_texlive      # altes texlive-init-Volume, falls vorhanden
 ```
 
 Backups aus Phase 0 noch eine Weile aufheben.

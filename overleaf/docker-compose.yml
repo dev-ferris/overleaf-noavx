@@ -4,8 +4,8 @@
 #   cp overleaf.env.example overleaf.env    # Overleaf-Konfiguration (Secrets!)
 #   docker compose up -d
 #
-# TeX Live: vollständig über Sandboxed Compiles (Service "texlive"). Vor dem ersten Start
-# OVERLEAF_HOST_DATA_DIR in .env prüfen, siehe README.
+# TeX Live: vollständig aus texlive/texlive, per Volume eingebunden (Service "texlive-init").
+# Der erste Start kopiert ~6 GB ins Volume und dauert einige Minuten.
 #
 # Admin-Shell für MongoDB (das no-AVX-Image enthält kein mongosh):
 #   docker compose run --rm mongo-shell                         # interaktiv
@@ -66,14 +66,38 @@ services:
           print("Replica Set initialisiert");
         }
 
-  # Vollständiges TeX Live für Sandboxed Compiles.
-  # Läuft nicht dauerhaft: Der Service sorgt nur dafür, dass "docker compose up/pull"
-  # das Image lädt (~5 GB). Overleaf startet daraus pro Projekt einen Compile-Container.
-  texlive:
+  # Vollständiges TeX Live per Volume (kein Docker-Socket nötig).
+  # Kopiert TeX Live aus dem texlive/texlive-Image ins Volume "texlive" und beendet sich.
+  # - Kopiert nur, wenn sich der Inhalt geändert hat (Marker = Jahrgang + Prüfsumme der
+  #   Paketdatenbank) -> ein neues TEXLIVE_IMAGE wird beim nächsten "up" übernommen.
+  # - Legt den Link "current" auf den Jahrgang an; Overleaf findet die Binaries über PATH,
+  #   unabhängig davon, welcher Jahrgang im Overleaf-Image selbst steckt.
+  texlive-init:
     image: ${TEXLIVE_IMAGE:-texlive/texlive:latest-full}
     restart: "no"
-    entrypoint: ["true"]
     network_mode: none
+    volumes:
+      - texlive:/target
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        SRC=/usr/local/texlive
+        YEAR=$$(ls -1 "$$SRC" | grep -E '^[0-9]{4}$$' | sort | tail -n 1)
+        [ -n "$$YEAR" ] || { echo "FEHLER: kein TeX-Live-Jahrgang unter $$SRC" >&2; exit 1; }
+        ID="$$YEAR $$(md5sum "$$SRC/$$YEAR/tlpkg/texlive.tlpdb" | cut -d' ' -f1)"
+        if [ "$$(cat /target/.texlive-source 2>/dev/null || true)" != "$$ID" ]; then
+          echo "Kopiere TeX Live $$YEAR ins Volume (einmalig, einige Minuten) ..."
+          find /target -mindepth 1 -delete
+          cp -a "$$SRC/." /target/
+          echo "$$ID" > /target/.texlive-source
+        else
+          echo "TeX Live $$YEAR im Volume ist aktuell"
+        fi
+        ln -sfn "$$YEAR" /target/current
+        test -x /target/current/bin/x86_64-linux/latexmk \
+          || { echo "FEHLER: latexmk fehlt in /target/current/bin/x86_64-linux" >&2; exit 1; }
+        echo "OK: $$(/target/current/bin/x86_64-linux/pdflatex --version | head -n 1)"
 
   sharelatex:
     <<: *common
@@ -84,30 +108,20 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      texlive:
+      texlive-init:
         condition: service_completed_successfully
     environment:
       OVERLEAF_MONGO_URL: mongodb://mongo/sharelatex?replicaSet=rs0
       OVERLEAF_REDIS_HOST: redis
       REDIS_HOST: redis
 
-      # --- Sandboxed Compiles (CEP) ----------------------------------------
-      # Jedes Projekt kompiliert in einem eigenen TeX-Live-Container -> alle Pakete verfügbar.
-      DOCKER_RUNNER: "true"
-      SANDBOXED_COMPILES: "true"
-      ALL_TEX_LIVE_DOCKER_IMAGES: ${TEXLIVE_IMAGE:-texlive/texlive:latest-full}
-      ALL_TEX_LIVE_DOCKER_IMAGE_NAMES: ${TEXLIVE_IMAGE_NAME:-TeX Live (vollständig)}
-      TEX_LIVE_DOCKER_IMAGE: ${TEXLIVE_IMAGE:-texlive/texlive:latest-full}
-      # Die Compile-Container startet der Docker-Daemon des HOSTS. Er braucht deshalb
-      # die Host-Pfade der Verzeichnisse unter /var/lib/overleaf/data.
-      SANDBOXED_COMPILES_HOST_DIR_COMPILES: ${OVERLEAF_HOST_DATA_DIR:-/var/lib/docker/volumes/overleaf_sharelatex_data/_data}/data/compiles
-      SANDBOXED_COMPILES_HOST_DIR_OUTPUT: ${OVERLEAF_HOST_DATA_DIR:-/var/lib/docker/volumes/overleaf_sharelatex_data/_data}/data/output
-      SANDBOXED_COMPILES_HOST_DIR_CACHE: ${OVERLEAF_HOST_DATA_DIR:-/var/lib/docker/volumes/overleaf_sharelatex_data/_data}/data/cache
+      # TeX Live aus dem Volume zuerst im PATH. CLSI ruft latexmk/pdflatex über den PATH
+      # auf; die Symlinks des Overleaf-Images in /usr/local/bin werden damit überdeckt.
+      PATH: /usr/local/texlive/current/bin/x86_64-linux:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     volumes:
       - sharelatex_data:/var/lib/overleaf
-      # Zugriff auf den Docker-Daemon zum Starten der Compile-Container.
-      # Sicherheitshinweis: entspricht faktisch Root-Rechten auf dem Host.
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Ersetzt das minimale TeX Live des Overleaf-Images durch das vollständige
+      - texlive:/usr/local/texlive:ro
     labels:
       autoheal: "true"
       # caddy-docker-proxy: Route aus den Labels erzeugen
@@ -132,6 +146,7 @@ services:
       - mongo
 
 volumes:
+  texlive:
   sharelatex_data:
   mongo_data:
   redis_data:
