@@ -80,6 +80,13 @@ Details: [`overleaf/README.md`](overleaf/README.md)
   LaTeX is compiled without a sandbox directly in the Overleaf container.
 - MongoDB is licensed under the SSPL, Overleaf under the AGPLv3.
 
+## About this repository
+
+This repository – build scripts, compose setup and documentation – was created with the help of
+[Claude](https://www.anthropic.com/claude), an AI assistant by Anthropic. The setup was developed
+and tested in practice on the maintainer's own hardware (NAS without AVX, MongoDB build on an
+Intel Mac); review the configuration before using it in your own environment.
+
 ## Credits
 
 - [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) – patches and Bazel configuration for MongoDB 8.0 without AVX
