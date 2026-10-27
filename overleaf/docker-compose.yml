@@ -1,6 +1,6 @@
 # Overleaf Community Edition Extended (CEP) 6.x mit MongoDB 8 ohne AVX
 #
-#   cp .env.example .env                    # Compose-Variablen (Images, Hostname, Pfade)
+#   cp .env.example .env                    # Compose-Variablen (Images, Port, Projektname)
 #   cp overleaf.env.example overleaf.env    # Overleaf-Konfiguration (Secrets!)
 #   docker compose up -d
 #
@@ -122,15 +122,11 @@ services:
       - sharelatex_data:/var/lib/overleaf
       # Ersetzt das minimale TeX Live des Overleaf-Images durch das vollständige
       - texlive:/usr/local/texlive:ro
+    ports:
+      # Für einen Reverse Proxy auf demselben Host z. B. "127.0.0.1:8088" setzen
+      - "${OVERLEAF_BIND:-8088}:80"
     labels:
       autoheal: "true"
-      # caddy-docker-proxy: Route aus den Labels erzeugen
-      caddy: ${OVERLEAF_HOSTNAME:-https://overleaf.example.com}
-      caddy.reverse_proxy: "{{upstreams 80}}"
-      caddy_ingress_network: ${CADDY_NETWORK:-caddy}
-    networks:
-      - default
-      - caddy
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost/status || exit 1"]
       interval: 30s
@@ -150,8 +146,3 @@ volumes:
   sharelatex_data:
   mongo_data:
   redis_data:
-
-networks:
-  caddy:
-    external: true
-    name: ${CADDY_NETWORK:-caddy}

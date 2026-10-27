@@ -218,7 +218,11 @@ cp overleaf.env.example overleaf.env
 
 - `COMPOSE_PROJECT_NAME` = **alter Präfix** (`$PROJECT` aus Phase 0). Sonst legt Compose
   neue, leere Volumes an und Overleaf startet wie eine Neuinstallation.
-- `MONGO_IMAGE`, `OVERLEAF_HOSTNAME`, `CADDY_NETWORK` anpassen.
+- `MONGO_IMAGE`, `OVERLEAF_BIND` anpassen.
+- Das Compose enthält keinen Reverse Proxy mehr. Lief Overleaf bisher hinter Caddy
+  (Labels), den Proxy auf den veröffentlichten Port umstellen, siehe
+  [`../overleaf/README.md`](../overleaf/README.md#https-über-einen-reverse-proxy-optional).
+  `OVERLEAF_SITE_URL` und `OVERLEAF_SECURE_COOKIE` entsprechend übernehmen.
 
 **`overleaf.env`:** Werte aus der alten `.env` übernehmen (`OVERLEAF_SITE_URL`, App-Name,
 Template-Galerie …) und ergänzen:

@@ -84,11 +84,12 @@ docker compose run --rm mongo-shell --quiet --eval \
   'rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})'
 ```
 
-### Caddy erreicht den Container nicht (502)
+### Reverse Proxy: 502 oder Editor verbindet nicht
 
-Hängt `sharelatex` in mehreren Netzwerken, muss caddy-docker-proxy wissen, welches es nehmen
-soll: Label `caddy_ingress_network` (im Compose gesetzt) oder `CADDY_INGRESS_NETWORKS` am
-Caddy-Container. Prüfen mit `docker logs <caddy-container>`.
+502: Der Proxy erreicht `http://<host>:<OVERLEAF_BIND>` nicht – Port und Bind-Adresse in
+`.env` prüfen (`127.0.0.1:…` ist nur vom Host selbst erreichbar, nicht aus einem anderen
+Container). Seite lädt, aber der Editor bleibt bei „Connecting“: WebSockets werden nicht
+durchgereicht, siehe [`../overleaf/README.md`](../overleaf/README.md#https-über-einen-reverse-proxy-optional).
 
 ### `user_files` existiert nach der Binary-File-Migration nicht mehr
 

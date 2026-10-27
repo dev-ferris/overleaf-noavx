@@ -1,8 +1,9 @@
 # Overleaf CEP 6.x – Neuinstallation mit Docker Compose
 
 Setup für [Overleaf Extended Community Edition (CEP)](https://github.com/yu-i-i/overleaf-cep)
-mit MongoDB 8 ohne AVX, Redis 7.4, **vollständigem TeX Live** (per Volume, ohne Docker-Socket) und
-[caddy-docker-proxy](https://github.com/lucaslorentz/caddy-docker-proxy) als HTTPS-Reverse-Proxy.
+mit MongoDB 8 ohne AVX, Redis 7.4 und **vollständigem TeX Live** (per Volume, ohne Docker-Socket).
+Overleaf ist direkt über HTTP auf einem Port erreichbar; ein Reverse Proxy für HTTPS ist optional
+und nicht Teil des Compose.
 
 Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 [`../docs/migration-5.5-to-6.3.md`](../docs/migration-5.5-to-6.3.md).
@@ -12,7 +13,7 @@ Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 | Datei | Zweck |
 |---|---|
 | `docker-compose.yml` | Redis, MongoDB, Replica-Set-Init, TeX-Live-Volume, Overleaf, mongosh-Werkzeug |
-| `.env.example` | Compose-Variablen: Images, Hostname, Projektname |
+| `.env.example` | Compose-Variablen: Images, Port, Projektname |
 | `overleaf.env.example` | Overleaf-Konfiguration inkl. Secrets |
 
 ## Voraussetzungen
@@ -20,8 +21,6 @@ Für ein **Upgrade einer bestehenden 5.5-Installation** gilt stattdessen
 - MongoDB-Image ohne AVX: Standard ist [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx)
   von Docker Hub (wird beim ersten `up` gezogen). Eigenbau siehe [`../mongodb-noavx`](../mongodb-noavx),
   bei CPU mit AVX stattdessen `MONGO_IMAGE=mongo:8.0`
-- caddy-docker-proxy läuft, sein Netzwerk existiert (`docker network ls`)
-- DNS-Eintrag für den Hostnamen zeigt auf den Host
 - Rund 15 GB freier Platz für TeX Live (Image ~5 GB komprimiert + Volume ~8 GB)
 
 ## Einrichtung
@@ -32,8 +31,8 @@ cp overleaf.env.example overleaf.env
 openssl rand -base64 32        # -> OVERLEAF_INVITE_TOKEN_SECRET in overleaf.env
 ```
 
-In `.env` anpassen: `OVERLEAF_HOSTNAME`, `CADDY_NETWORK`, `MONGO_IMAGE`.
-In `overleaf.env` anpassen: `OVERLEAF_SITE_URL` (identisch zum Hostnamen),
+In `.env` anpassen: `OVERLEAF_BIND` (Port, Standard 8088), `MONGO_IMAGE`.
+In `overleaf.env` anpassen: `OVERLEAF_SITE_URL` (exakt die Adresse im Browser, inkl. Port),
 `OVERLEAF_INVITE_TOKEN_SECRET`, `OVERLEAF_ADMIN_EMAIL`.
 
 ```bash
@@ -48,7 +47,7 @@ Die Startreihenfolge erzwingt Compose: `mongo` (healthy) → `mongo-init` (Repli
 
 ### Ersten Administrator anlegen
 
-Im Browser `https://<hostname>/launchpad` öffnen und Konto anlegen – die Seite gibt es nur,
+Im Browser `http://<host>:8088/launchpad` öffnen und Konto anlegen – die Seite gibt es nur,
 solange noch kein Admin existiert. Alternativ:
 
 ```bash
@@ -58,14 +57,31 @@ docker compose exec sharelatex bash -c \
 
 Das Skript gibt einen Link zum Setzen des Passworts aus. Weitere Nutzer unter *Admin → Manage Users*.
 
-## Ohne Reverse Proxy (nur zum Testen)
+## HTTPS über einen Reverse Proxy (optional)
 
-Im Compose bei `sharelatex` die Caddy-Labels und das Netzwerk `caddy` entfernen und
-`ports: ["8088:80"]` ergänzen. In `overleaf.env`:
+Das Compose veröffentlicht nur HTTP auf `OVERLEAF_BIND`. Für HTTPS einen beliebigen Reverse
+Proxy (Caddy, Traefik, nginx …) davorsetzen:
+
+1. Proxy auf `http://<host>:8088` weiterleiten lassen. **WebSockets** müssen durchgereicht
+   werden (Echtzeit-Editor); bei Caddy und Traefik passiert das automatisch, bei nginx
+   `proxy_set_header Upgrade` / `Connection "upgrade"` setzen.
+2. Läuft der Proxy auf demselben Host: `OVERLEAF_BIND=127.0.0.1:8088` in `.env`, damit Overleaf
+   nicht zusätzlich unverschlüsselt im Netz erreichbar ist.
+3. In `overleaf.env`:
 
 ```env
-OVERLEAF_SITE_URL=http://overleaf-host.example.com:8088
-# OVERLEAF_SECURE_COOKIE=true      <- auskommentieren, nicht auf false setzen!
+OVERLEAF_SITE_URL=https://overleaf.example.home
+OVERLEAF_SECURE_COOKIE=true
+```
+
+Danach `docker compose up -d --force-recreate sharelatex`.
+
+Beispiel Caddyfile:
+
+```caddyfile
+overleaf.example.home {
+    reverse_proxy 127.0.0.1:8088
+}
 ```
 
 ## TeX Live
