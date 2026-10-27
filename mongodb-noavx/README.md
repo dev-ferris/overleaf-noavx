@@ -13,6 +13,7 @@ fortsetzbaren Build und ein schlankes Laufzeit-Image.
 |---|---|
 | `build.sh` | Kompiliert `mongod` (oder übernimmt ein vorhandenes) und baut das Laufzeit-Image |
 | `Dockerfile` | Laufzeit-Image: Ubuntu Noble, Entrypoint `mongod`, User `mongodb`, `/data/db` |
+| `DOCKERHUB.md` | Beschreibung für die Docker-Hub-Seite (Englisch) |
 
 ## Fertiges Image
 
@@ -26,6 +27,11 @@ Wer nicht selbst bauen will: fertig gebaut mit diesem Verzeichnis, identisch in 
 Die GHCR-Kopie erzeugt der Workflow
 [`.github/workflows/mirror-mongodb-image.yml`](../.github/workflows/mirror-mongodb-image.yml)
 (manuell unter *Actions* auslösen, z. B. nach einem neuen Build).
+
+Die Beschreibung auf Docker Hub stammt aus [`DOCKERHUB.md`](DOCKERHUB.md) und wird vom Workflow
+[`.github/workflows/dockerhub-description.yml`](../.github/workflows/dockerhub-description.yml)
+bei jeder Änderung übertragen. Er braucht die Repository-Secrets `DOCKERHUB_USERNAME` und
+`DOCKERHUB_TOKEN` (Personal Access Token mit Scope *Read, Write, Delete*).
 
 | Tag | MongoDB | `CPU_ARCH` | UID/GID `mongodb` |
 |---|---|---|---|

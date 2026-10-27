@@ -1,0 +1,37 @@
+# Überträgt mongodb-noavx/DOCKERHUB.md als Beschreibung auf die Docker-Hub-Seite
+# von devferris/mongodb-no-avx.
+#
+# Einmalig einrichten (Repository → Settings → Secrets and variables → Actions):
+#   DOCKERHUB_USERNAME  Docker-Hub-Benutzername (devferris)
+#   DOCKERHUB_TOKEN     Personal Access Token mit Scope "Read, Write, Delete"
+#                       (Docker Hub → Account settings → Personal access tokens)
+#
+# Läuft automatisch bei Änderungen an DOCKERHUB.md und manuell unter Actions.
+
+name: Docker-Hub-Beschreibung aktualisieren
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - mongodb-noavx/DOCKERHUB.md
+      - .github/workflows/dockerhub-description.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  description:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker-Hub-Beschreibung setzen
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: devferris/mongodb-no-avx
+          short-description: "MongoDB 8.0 built without AVX – for Celeron/Atom/NAS CPUs. mongod only."
+          readme-filepath: ./mongodb-noavx/DOCKERHUB.md

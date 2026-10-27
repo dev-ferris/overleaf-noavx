@@ -19,7 +19,10 @@ ARG MONGO_GID=999
 LABEL org.opencontainers.image.title="mongodb-no-avx" \
       org.opencontainers.image.description="MongoDB ${MONGO_VERSION} ohne AVX (-march=${CPU_ARCH}), gebaut mit Axcient/mongod-avx" \
       org.opencontainers.image.version="${MONGO_VERSION}" \
-      org.opencontainers.image.licenses="SSPL-1.0"
+      org.opencontainers.image.licenses="SSPL-1.0" \
+      org.opencontainers.image.source="https://github.com/dev-ferris/overleaf-noavx" \
+      org.opencontainers.image.url="https://hub.docker.com/r/devferris/mongodb-no-avx" \
+      org.opencontainers.image.documentation="https://github.com/dev-ferris/overleaf-noavx/tree/main/mongodb-noavx"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
