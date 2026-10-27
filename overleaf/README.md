@@ -71,7 +71,7 @@ Proxy (Caddy, Traefik, nginx …) davorsetzen:
 3. In `overleaf.env`:
 
 ```env
-OVERLEAF_SITE_URL=https://overleaf.example.home
+OVERLEAF_SITE_URL=https://overleaf.example.com
 OVERLEAF_SECURE_COOKIE=true
 ```
 
@@ -80,7 +80,7 @@ Danach `docker compose up -d --force-recreate sharelatex`.
 Beispiel Caddyfile:
 
 ```caddyfile
-overleaf.example.home {
+overleaf.example.com {
     reverse_proxy 127.0.0.1:8088
 }
 ```
