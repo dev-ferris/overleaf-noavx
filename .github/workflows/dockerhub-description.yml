@@ -1,4 +1,4 @@
-# Pushes mongodb-noavx/DOCKERHUB.md as the description of the Docker Hub page
+# Pushes mongodb-noavx/README.md as the description of the Docker Hub page
 # of devferris/mongodb-no-avx.
 #
 # One-time setup (repository -> Settings -> Secrets and variables -> Actions):
@@ -6,7 +6,8 @@
 #   DOCKERHUB_TOKEN     personal access token with scope "Read, Write, Delete"
 #                       (Docker Hub -> Account settings -> Personal access tokens)
 #
-# Runs automatically when DOCKERHUB.md changes, and manually under Actions.
+# Runs automatically when that README changes, and manually under Actions.
+# Use absolute links in the README – relative links do not resolve on Docker Hub.
 
 name: Update Docker Hub description
 
@@ -14,7 +15,7 @@ on:
   push:
     branches: [main]
     paths:
-      - mongodb-noavx/DOCKERHUB.md
+      - mongodb-noavx/README.md
       - .github/workflows/dockerhub-description.yml
   workflow_dispatch:
 
@@ -34,4 +35,4 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: devferris/mongodb-no-avx
           short-description: "MongoDB 8.0 built without AVX – for Celeron/Atom/NAS CPUs. mongod only."
-          readme-filepath: ./mongodb-noavx/DOCKERHUB.md
+          readme-filepath: ./mongodb-noavx/README.md
