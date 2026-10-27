@@ -16,8 +16,16 @@ fortsetzbaren Build und ein schlankes Laufzeit-Image.
 
 ## Fertiges Image
 
-Wer nicht selbst bauen will: [`devferris/mongodb-no-avx`](https://hub.docker.com/r/devferris/mongodb-no-avx)
-auf Docker Hub, gebaut mit diesem Verzeichnis.
+Wer nicht selbst bauen will: fertig gebaut mit diesem Verzeichnis, identisch in zwei Registries:
+
+| Registry | Image |
+|---|---|
+| Docker Hub | [`devferris/mongodb-no-avx`](https://hub.docker.com/r/devferris/mongodb-no-avx) |
+| GitHub Container Registry | `ghcr.io/dev-ferris/mongodb-no-avx` (zusätzlich Tag `latest`) |
+
+Die GHCR-Kopie erzeugt der Workflow
+[`.github/workflows/mirror-mongodb-image.yml`](../.github/workflows/mirror-mongodb-image.yml)
+(manuell unter *Actions* auslösen, z. B. nach einem neuen Build).
 
 | Tag | MongoDB | `CPU_ARCH` | UID/GID `mongodb` |
 |---|---|---|---|

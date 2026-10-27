@@ -27,7 +27,8 @@ Ausgabe `avx` → offizielles `mongo:8.0` verwenden und direkt bei Schritt 3 wei
 
 **2. MongoDB-Image ohne AVX besorgen**
 
-Fertiges Image auf Docker Hub – für CPUs mit SSE4.2/POPCNT, aber ohne AVX (`nehalem`):
+Fertiges Image auf Docker Hub (identisch auch als `ghcr.io/dev-ferris/mongodb-no-avx`) –
+für CPUs mit SSE4.2/POPCNT, aber ohne AVX (`nehalem`):
 
 ```bash
 docker pull devferris/mongodb-no-avx:8.0.17-nehalem
