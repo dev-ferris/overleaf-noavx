@@ -1,14 +1,14 @@
-# Überträgt mongodb-noavx/DOCKERHUB.md als Beschreibung auf die Docker-Hub-Seite
-# von devferris/mongodb-no-avx.
+# Pushes mongodb-noavx/DOCKERHUB.md as the description of the Docker Hub page
+# of devferris/mongodb-no-avx.
 #
-# Einmalig einrichten (Repository → Settings → Secrets and variables → Actions):
-#   DOCKERHUB_USERNAME  Docker-Hub-Benutzername (devferris)
-#   DOCKERHUB_TOKEN     Personal Access Token mit Scope "Read, Write, Delete"
-#                       (Docker Hub → Account settings → Personal access tokens)
+# One-time setup (repository -> Settings -> Secrets and variables -> Actions):
+#   DOCKERHUB_USERNAME  Docker Hub user name (devferris)
+#   DOCKERHUB_TOKEN     personal access token with scope "Read, Write, Delete"
+#                       (Docker Hub -> Account settings -> Personal access tokens)
 #
-# Läuft automatisch bei Änderungen an DOCKERHUB.md und manuell unter Actions.
+# Runs automatically when DOCKERHUB.md changes, and manually under Actions.
 
-name: Docker-Hub-Beschreibung aktualisieren
+name: Update Docker Hub description
 
 on:
   push:
@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Docker-Hub-Beschreibung setzen
+      - name: Set Docker Hub description
         uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}

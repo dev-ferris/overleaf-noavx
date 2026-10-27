@@ -1,4 +1,4 @@
-# Build-Kontext des Laufzeit-Images: nur Dockerfile + bin/mongod werden gebraucht
+# Build context of the runtime image: only Dockerfile + bin/mongod are needed
 *
 !Dockerfile
 !bin/mongod

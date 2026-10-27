@@ -1,22 +1,22 @@
-# Spiegelt das MongoDB-no-AVX-Image von Docker Hub in die GitHub Container Registry.
+# Mirrors the MongoDB no-AVX image from Docker Hub to the GitHub Container Registry.
 #
-# Auslösen: Actions -> "MongoDB-Image nach GHCR spiegeln" -> "Run workflow"
-# Ergebnis: ghcr.io/<owner>/mongodb-no-avx:<tag>
+# Trigger: Actions -> "Mirror MongoDB image to GHCR" -> "Run workflow"
+# Result:  ghcr.io/<owner>/mongodb-no-avx:<tag>
 #
-# Das Image wird unverändert übernommen (gleiche Layer, gleicher Inhalt). Authentifizierung
-# an ghcr.io über das automatische GITHUB_TOKEN dieses Repositorys, keine Secrets nötig.
+# The image is copied unchanged (same layers, same content). Authentication to ghcr.io
+# uses this repository's automatic GITHUB_TOKEN, no secrets required.
 
-name: MongoDB-Image nach GHCR spiegeln
+name: Mirror MongoDB image to GHCR
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag auf Docker Hub (devferris/mongodb-no-avx:<tag>)"
+        description: "Tag on Docker Hub (devferris/mongodb-no-avx:<tag>)"
         required: true
         default: "8.0.17-nehalem"
       latest:
-        description: "Zusätzlich als :latest taggen"
+        description: "Also tag as :latest"
         type: boolean
         default: true
 
@@ -30,26 +30,26 @@ jobs:
     env:
       SOURCE: docker.io/devferris/mongodb-no-avx
     steps:
-      - name: Bei ghcr.io anmelden
+      - name: Log in to ghcr.io
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Ziel bestimmen
+      - name: Determine target
         id: target
         run: |
           owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           echo "image=ghcr.io/${owner}/mongodb-no-avx" >> "$GITHUB_OUTPUT"
 
-      - name: Image ziehen
+      - name: Pull image
         run: docker pull "${SOURCE}:${{ inputs.tag }}"
 
-      - name: Prüfen (Version)
+      - name: Check (version)
         run: docker run --rm "${SOURCE}:${{ inputs.tag }}" --version
 
-      - name: Taggen und pushen
+      - name: Tag and push
         env:
           TARGET: ${{ steps.target.outputs.image }}
         run: |
@@ -60,12 +60,12 @@ jobs:
             docker push "${TARGET}:latest"
           fi
 
-      - name: Zusammenfassung
+      - name: Summary
         env:
           TARGET: ${{ steps.target.outputs.image }}
         run: |
           {
-            echo "### Gespiegelt"
+            echo "### Mirrored"
             echo ""
             echo "\`${SOURCE}:${{ inputs.tag }}\` → \`${TARGET}:${{ inputs.tag }}\`"
             echo ""

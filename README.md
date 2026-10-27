@@ -1,87 +1,87 @@
 # overleaf-noavx
 
-Self-hosted [Overleaf](https://www.overleaf.com) – genauer die
-[Extended Community Edition (CEP)](https://github.com/yu-i-i/overleaf-cep) – auf Hardware
-**ohne AVX** (typisch: NAS und Mini-PCs mit Celeron, Pentium Silver oder Atom).
+Self-hosted [Overleaf](https://www.overleaf.com) – more precisely the
+[Extended Community Edition (CEP)](https://github.com/yu-i-i/overleaf-cep) – on hardware
+**without AVX** (typically NAS boxes and mini PCs with Celeron, Pentium Silver or Atom CPUs).
 
-Overleaf 6.x verlangt MongoDB 8.0, und die offiziellen MongoDB-Builds starten ohne AVX nicht.
-Dieses Repository enthält alles, um das zu umgehen:
+Overleaf 6.x requires MongoDB 8.0, and the official MongoDB builds do not start without AVX.
+This repository contains everything needed to work around that:
 
-| Verzeichnis | Inhalt |
+| Directory | Contents |
 |---|---|
-| [`mongodb-noavx/`](mongodb-noavx) | Build von MongoDB 8.0 ohne AVX als Docker-Image |
-| [`overleaf/`](overleaf) | Docker-Compose-Setup für Overleaf CEP 6.x mit vollständigem TeX Live |
-| [`docs/migration-5.5-to-6.3.md`](docs/migration-5.5-to-6.3.md) | Upgrade von Overleaf 5.5 + MongoDB 7 auf 6.3 + MongoDB 8 |
-| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Fehlerbilder und Lösungen |
+| [`mongodb-noavx/`](mongodb-noavx) | Build of MongoDB 8.0 without AVX as a Docker image |
+| [`overleaf/`](overleaf) | Docker Compose setup for Overleaf CEP 6.x with a full TeX Live |
+| [`docs/migration-5.5-to-6.3.md`](docs/migration-5.5-to-6.3.md) | Upgrade from Overleaf 5.5 + MongoDB 7 to 6.3 + MongoDB 8 |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common errors and fixes |
 
-## Schnellstart
+## Quick start
 
-**1. Prüfen, ob du das brauchst** (auf dem Zielsystem):
+**1. Check whether you need this** (on the target machine):
 
 ```bash
 grep -o -w avx /proc/cpuinfo | head -1
 ```
 
-Ausgabe `avx` → offizielles `mongo:8.0` verwenden und direkt bei Schritt 3 weitermachen
+Output `avx` → use the official `mongo:8.0` image and continue with step 3
 (`MONGO_IMAGE=mongo:8.0` in `overleaf/.env`).
 
-**2. MongoDB-Image ohne AVX besorgen**
+**2. Get the MongoDB image without AVX**
 
-Fertiges Image auf Docker Hub (identisch auch als `ghcr.io/dev-ferris/mongodb-no-avx`) –
-für CPUs mit SSE4.2/POPCNT, aber ohne AVX (`nehalem`):
+Prebuilt image on Docker Hub (identical copy at `ghcr.io/dev-ferris/mongodb-no-avx`) –
+for CPUs with SSE4.2/POPCNT but without AVX (`nehalem`):
 
 ```bash
 docker pull devferris/mongodb-no-avx:8.0.17-nehalem
-docker run --rm devferris/mongodb-no-avx:8.0.17-nehalem --version     # Smoke-Test auf dem Zielsystem
+docker run --rm devferris/mongodb-no-avx:8.0.17-nehalem --version     # smoke test on the target machine
 ```
 
-Das ist der Standard in `overleaf/docker-compose.yml`. Startet es mit `Illegal instruction`,
-oder willst du selbst bauen (`core2`, eigene UID, neuere Version), dann auf einem kräftigen
-x86_64-Rechner – dauert Stunden:
+This is the default in `overleaf/docker-compose.yml`. If it fails with `Illegal instruction`,
+or if you want to build it yourself (`core2`, different UID, newer version), do so on a
+powerful x86_64 machine – it takes hours:
 
 ```bash
 cd mongodb-noavx
 CPU_ARCH=nehalem JOBS=2 ./build.sh --save
-# Ergebnis aufs NAS kopieren und dort: gunzip -c <datei>.tar.gz | docker load
+# copy the result to the target host and run there: gunzip -c <file>.tar.gz | docker load
 ```
 
 Details: [`mongodb-noavx/README.md`](mongodb-noavx/README.md)
 
-**3. Overleaf aufsetzen** – auf dem NAS:
+**3. Set up Overleaf** – on the target host:
 
 ```bash
 cd overleaf
 cp .env.example .env && cp overleaf.env.example overleaf.env
-# OVERLEAF_SITE_URL, Secret (openssl rand -base64 32) usw. eintragen
-docker compose pull              # TeX-Live-Image: mehrere GB
-docker compose up -d             # erster Start kopiert TeX Live ins Volume, einige Minuten
+# fill in OVERLEAF_SITE_URL, secret (openssl rand -base64 32) etc.
+docker compose pull              # TeX Live image: several GB
+docker compose up -d             # first start copies TeX Live into a volume, a few minutes
 ```
 
-Danach `http://<host>:8088/launchpad` für den ersten Admin.
+Then open `http://<host>:8088/launchpad` to create the first admin.
 Details: [`overleaf/README.md`](overleaf/README.md)
 
-**Bestehende 5.5-Installation?** → [`docs/migration-5.5-to-6.3.md`](docs/migration-5.5-to-6.3.md)
+**Existing 5.5 installation?** → [`docs/migration-5.5-to-6.3.md`](docs/migration-5.5-to-6.3.md)
 
-## Referenz-Setup
+## Reference setup
 
-| Komponente | Version |
+| Component | Version |
 |---|---|
 | Overleaf | `overleafcep/sharelatex:6.3.0-ext-v5.1` |
-| MongoDB | [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx) – 8.0.17, `-march=nehalem`, Build über [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
+| MongoDB | [`devferris/mongodb-no-avx:8.0.17-nehalem`](https://hub.docker.com/r/devferris/mongodb-no-avx) – 8.0.17, `-march=nehalem`, built via [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) `v8.0.17` |
 | Redis | 7.4 |
-| TeX Live | `texlive/texlive:latest`, per Volume eingebunden |
-| Build-Host | Intel-Mac, Docker Desktop, 12 GB VM |
+| TeX Live | `texlive/texlive:latest`, mounted as a volume |
+| Build host | Intel Mac, Docker Desktop, 12 GB VM |
 
-## Hinweise
+## Notes
 
-- Der MongoDB-Build ist inoffiziell und von MongoDB weder getestet noch unterstützt.
-  Regelmäßige Backups sind Pflicht.
-- Overleaf Community Edition ist für Umgebungen mit vertrauenswürdigen Nutzern gedacht:
-  LaTeX wird ohne Sandbox direkt im Overleaf-Container kompiliert.
-- MongoDB steht unter der SSPL, Overleaf unter der AGPLv3.
+- The MongoDB build is unofficial and neither tested nor supported by MongoDB.
+  Regular backups are mandatory.
+- Overleaf Community Edition is intended for environments with trusted users:
+  LaTeX is compiled without a sandbox directly in the Overleaf container.
+- MongoDB is licensed under the SSPL, Overleaf under the AGPLv3.
 
-## Danksagung
+## Credits
 
-- [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) – Patches und Bazel-Konfiguration für MongoDB 8.0 ohne AVX
-- [fenio/mongodb-no-avx](https://github.com/fenio/mongodb-no-avx) – MongoDB 7.0 ohne AVX, Vorlage für das Laufzeit-Image
+- [Axcient/mongod-avx](https://github.com/Axcient/mongod-avx) – patches and Bazel configuration for MongoDB 8.0 without AVX
+- [fenio/mongodb-no-avx](https://github.com/fenio/mongodb-no-avx) – MongoDB 7.0 without AVX, template for the runtime image
 - [yu-i-i/overleaf-cep](https://github.com/yu-i-i/overleaf-cep) – Overleaf Extended Community Edition

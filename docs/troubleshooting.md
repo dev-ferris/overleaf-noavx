@@ -1,101 +1,104 @@
 # Troubleshooting
 
-Typische Fehlerbilder mit Ursache und Lösung – die meisten sind beim Aufsetzen dieses Setups tatsächlich aufgetreten.
+Common errors with cause and fix – most of them actually occurred while setting up this stack.
 
 ## Overleaf
 
-### „Session error. Please check you have cookies enabled.“
+### "Session error. Please check you have cookies enabled."
 
-**Ursache:** Secure-Cookies bei Zugriff über HTTP. Overleaf wertet `OVERLEAF_SECURE_COOKIE`
-nur auf *gesetzt* aus (`process.env.OVERLEAF_SECURE_COOKIE != null`) –
-`OVERLEAF_SECURE_COOKIE=false` schaltet Secure-Cookies also **ein**. Der Browser verwirft das
-Cookie über HTTP, der Login scheitert an der CSRF-Prüfung.
+**Cause:** secure cookies while accessing via HTTP. Overleaf only checks whether
+`OVERLEAF_SECURE_COOKIE` is *set* (`process.env.OVERLEAF_SECURE_COOKIE != null`) –
+`OVERLEAF_SECURE_COOKIE=false` therefore turns secure cookies **on**. The browser drops the
+cookie over HTTP, and the login fails the CSRF check.
 
-**Lösung:** Bei HTTP-Zugriff die Zeile entfernen bzw. auskommentieren, nur bei HTTPS setzen.
-`OVERLEAF_SITE_URL` muss exakt der Adresse im Browser entsprechen (inkl. Port).
-Änderungen an Env-Dateien erfordern `docker compose up -d --force-recreate sharelatex`,
-ein `restart` reicht nicht.
+**Fix:** for HTTP access remove or comment out the line; only set it for HTTPS.
+`OVERLEAF_SITE_URL` must match the address in the browser exactly (including port).
+Changes to env files require `docker compose up -d --force-recreate sharelatex`;
+a `restart` is not enough.
 
-### „Missing required secrets: OVERLEAF_INVITE_TOKEN_SECRET“, Container startet in Schleife
+### "Missing required secrets: OVERLEAF_INVITE_TOKEN_SECRET", container restarts in a loop
 
-Seit 6.2 Pflicht. `openssl rand -base64 32` einmal erzeugen, in `overleaf.env` eintragen und
-nie mehr ändern (sonst werden offene Einladungen ungültig). Nicht dynamisch im Compose erzeugen.
+Required since 6.2. Generate `openssl rand -base64 32` once, put it into `overleaf.env` and
+never change it (otherwise pending invitations become invalid). Do not generate it dynamically
+in the compose file.
 
 ### `LaTeX Error: File 'scrlttr2.cls' not found`
 
-Overleaf kompiliert mit dem minimalen TeX Live des Images statt mit dem Volume. Prüfen:
+Overleaf compiles with the minimal TeX Live of the image instead of the volume. Check:
 
 ```bash
 docker compose exec sharelatex bash -c 'which latexmk; kpsewhich scrlttr2.cls'
 ```
 
-Erwartet: `/usr/local/texlive/current/bin/x86_64-linux/latexmk` und ein Pfad zu `scrlttr2.cls`.
-Zeigt `which` auf `/usr/local/bin/...`, fehlt die `PATH`-Variable im Service `sharelatex` oder
-das Volume `texlive` ist nicht eingebunden. Nach Änderungen
+Expected: `/usr/local/texlive/current/bin/x86_64-linux/latexmk` and a path to `scrlttr2.cls`.
+If `which` points to `/usr/local/bin/...`, the `PATH` variable in the `sharelatex` service is
+missing or the `texlive` volume is not mounted. After changes run
 `docker compose up -d --force-recreate sharelatex`.
 
-`tlmgr install` im laufenden Overleaf-Container ist keine Lösung – beim Neuerstellen ist das Paket weg.
+`tlmgr install` in the running Overleaf container is no solution – the package is gone when
+the container is recreated.
 
-### `texlive-init` bricht ab, `sharelatex` startet nicht
+### `texlive-init` aborts, `sharelatex` does not start
 
 ```bash
 docker compose logs texlive-init
 ```
 
-| Meldung | Ursache |
+| Message | Cause |
 |---|---|
-| `kein TeX-Live-Jahrgang unter /usr/local/texlive` | `TEXLIVE_IMAGE` ist kein texlive/texlive-Image oder hat ein anderes Layout |
-| `latexmk fehlt` | Image ohne `latexmk` (z. B. `latest-minimal`) – `latest` verwenden |
-| `No space left on device` | Das Volume braucht etwa noch einmal so viel Platz wie das Image |
+| `no TeX Live release year found under /usr/local/texlive` | `TEXLIVE_IMAGE` is not a texlive/texlive image or has a different layout |
+| `latexmk missing` | Image without `latexmk` (e.g. `latest-minimal`) – use `latest` |
+| `No space left on device` | The volume needs about as much space again as the image |
 
-Ein abgebrochener Kopiervorgang wird beim nächsten `docker compose up -d` automatisch
-wiederholt (der Marker wird erst am Ende geschrieben).
+An interrupted copy is repeated automatically on the next `docker compose up -d`
+(the marker is only written at the end).
 
-### `pdflatex` nicht gefunden
+### `pdflatex` not found
 
-Klassischer Fehler beim alten Setup: Ein TeX-Live-Volume aus einem anderen Jahrgang liegt
-über `/usr/local/texlive`, die Symlinks des Overleaf-Images in `/usr/local/bin` zeigen ins
-Leere. Mit diesem Compose verhindert das der `PATH` auf `current`. Tritt es trotzdem auf:
-`PATH` im Service `sharelatex` prüfen (`docker compose config | grep PATH`).
+Classic error of the old setup: a TeX Live volume from a different release year sits on top of
+`/usr/local/texlive`, and the Overleaf image's symlinks in `/usr/local/bin` point nowhere.
+With this compose file the `PATH` to `current` prevents that. If it still happens, check `PATH`
+in the `sharelatex` service (`docker compose config | grep PATH`).
 
-### Overleaf hängt beim Start, Log zeigt Mongo-Timeouts
+### Overleaf hangs at startup, log shows Mongo timeouts
 
-Meist ist das Replica Set nicht initialisiert oder mit falschem Hostnamen eingetragen
-(Container-ID statt `mongo:27017`):
+Usually the replica set is not initialised or registered with the wrong host name
+(container ID instead of `mongo:27017`):
 
 ```bash
 docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval 'rs.conf().members.map(m => m.host)'
 ```
 
-Falschen Host korrigieren:
+Fix a wrong host:
 
 ```bash
 docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'c = rs.conf(); c.members[0].host = "mongo:27017"; rs.reconfig(c, {force: true})'
 ```
 
-### `rs.initiate(...)`: „bash: syntax error near unexpected token“
+### `rs.initiate(...)`: "bash: syntax error near unexpected token"
 
-Der Befehl ist JavaScript und gehört in `mongosh`, nicht in die Bash des Containers.
-Das no-AVX-Image enthält kein mongosh – über den Container `mongo-shell` ausführen
-(im Compose aus diesem Repository erledigt `mongo-shell` das beim Start ohnehin automatisch):
+The command is JavaScript and belongs in `mongosh`, not in the container's bash.
+The no-AVX image has no mongosh – run it via the `mongo-shell` container
+(with the compose file from this repository `mongo-shell` does this automatically at startup anyway):
 
 ```bash
 docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" --quiet --eval \
   'rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]})'
 ```
 
-### Reverse Proxy: 502 oder Editor verbindet nicht
+### Reverse proxy: 502 or the editor does not connect
 
-502: Der Proxy erreicht `http://<host>:<OVERLEAF_BIND>` nicht – Port und Bind-Adresse in
-`.env` prüfen (`127.0.0.1:…` ist nur vom Host selbst erreichbar, nicht aus einem anderen
-Container). Seite lädt, aber der Editor bleibt bei „Connecting“: WebSockets werden nicht
-durchgereicht, siehe [`../overleaf/README.md`](../overleaf/README.md#https-über-einen-reverse-proxy-optional).
+502: the proxy cannot reach `http://<host>:<OVERLEAF_BIND>` – check port and bind address in
+`.env` (`127.0.0.1:…` is only reachable from the host itself, not from another container).
+Page loads but the editor stays at "Connecting": WebSockets are not passed through, see
+[`../overleaf/README.md`](../overleaf/README.md#https-via-a-reverse-proxy-optional).
 
-### `user_files` existiert nach der Binary-File-Migration nicht mehr
+### `user_files` no longer exists after the binary files migration
 
-Erwartet: Schritt 5 der [Binary-File-Migration](migration-5.5-to-6.3.md#phase-1--binary-file-migration-overleaf-556-ext-mongodb-7)
-benennt es in `old_user_files` um; mit Stufe 2 liegen die Dateien in der History. Existierte nie ein `user_files`, wurden nie Binärdateien hochgeladen.
+Expected: step 5 of the [binary files migration](migration-5.5-to-6.3.md#phase-1--binary-files-migration-overleaf-556-ext-mongodb-7)
+renames it to `old_user_files`; with level 2 the files live in the history. If `user_files`
+never existed, no binary files were ever uploaded.
 
 ```bash
 docker compose run --rm --entrypoint ls sharelatex -la /var/lib/overleaf/data/
@@ -103,53 +106,53 @@ docker compose run --rm --entrypoint ls sharelatex -la /var/lib/overleaf/data/
 
 ## MongoDB
 
-### `sharelatex` startet nicht, wartet auf `mongo-shell`
+### `sharelatex` does not start, waits for `mongo-shell`
 
-`mongo-shell` wird erst *healthy*, wenn das Replica Set einen beschreibbaren Primary hat:
+`mongo-shell` only becomes *healthy* once the replica set has a writable primary:
 
 ```bash
 docker compose logs mongo-shell
 ```
 
-Bricht `mongo-shell` ab, weil MongoDB beim Start noch nicht erreichbar war, startet
-`restart: unless-stopped` es neu. Bleibt es dauerhaft ungesund: `docker compose logs mongo`
-prüfen (Rechte, `Illegal instruction`).
+If `mongo-shell` aborts because MongoDB was not reachable yet at startup,
+`restart: unless-stopped` restarts it. If it stays unhealthy: check `docker compose logs mongo`
+(permissions, `Illegal instruction`).
 
-### `Illegal instruction` / Exit-Code 132
+### `Illegal instruction` / exit code 132
 
-Die CPU kann Befehle nicht, die im Binary stecken: entweder offizielles MongoDB ≥ 5.0 auf einer
-CPU ohne AVX, oder der Eigenbau hat ein zu modernes `CPU_ARCH`. Mit `CPU_ARCH=core2` neu bauen.
+The CPU cannot execute instructions contained in the binary: either official MongoDB ≥ 5.0 on a
+CPU without AVX, or the custom build uses a too modern `CPU_ARCH`. Rebuild with `CPU_ARCH=core2`.
 
-### `Permission denied` auf `/data/db`
+### `Permission denied` on `/data/db`
 
-UID des `mongodb`-Users im neuen Image passt nicht zum Besitzer des bestehenden Volumes.
-UID im alten Image ermitteln und neu bauen (dauert nur Minuten):
+The UID of the `mongodb` user in the new image does not match the owner of the existing volume.
+Determine the UID in the old image and rebuild (takes only minutes):
 
 ```bash
 docker run --rm --entrypoint id ghcr.io/fenio/mongodb-no-avx:7.0.28
 MONGO_UID=<uid> MONGO_GID=<gid> ./build.sh --skip-compile --save
 ```
 
-### Startwarnungen im MongoDB-Log
+### Startup warnings in the MongoDB log
 
-| Warnung | Bewertung |
+| Warning | Assessment |
 |---|---|
-| `glibc support for rseq ... GLIBC_TUNABLES=glibc.pthread.rseq=0` | Im Compose gesetzt (und im aktuellen Dockerfile); bei eigenem Compose `GLIBC_TUNABLES` ergänzen |
-| `cache_size=15460M` o. ä. | `--wiredTigerCacheSizeGB` setzen, sonst nimmt MongoDB ~50 % RAM |
-| `Access control is not enabled` | Gewollt, solange Port 27017 nicht veröffentlicht ist |
-| `transparent_hugepage`, `swappiness` | Kernel-Einstellungen des Hosts, für Homelab unkritisch |
+| `glibc support for rseq ... GLIBC_TUNABLES=glibc.pthread.rseq=0` | Set in the compose file (and in the current Dockerfile); add `GLIBC_TUNABLES` to your own compose file |
+| `cache_size=15460M` or similar | Set `--wiredTigerCacheSizeGB`, otherwise MongoDB takes ~50 % of the RAM |
+| `Access control is not enabled` | Intended, as long as port 27017 is not published |
+| `transparent_hugepage`, `swappiness` | Kernel settings of the host, not critical for a home lab |
 
-## MongoDB-Build
+## MongoDB build
 
 ### `cannot allocate memory` / `Killed signal terminated program cc1plus`
 
-Speichermangel in der Docker-VM. Docker-Desktop-Speicher erhöhen und/oder `JOBS` verringern,
-dann einfach neu starten – der Bazel-Cache im Volume `mongod-avx-bazel-cache` sorgt dafür,
-dass es dort weitergeht. Läuft trotz `JOBS=2` mehr als zwei Compiler gleichzeitig, wurde
-`JOBS` nicht übergeben (Variable in derselben Zeile wie der Aufruf setzen).
+Out of memory in the Docker VM. Increase Docker Desktop's memory and/or reduce `JOBS`, then
+simply start again – the Bazel cache in the volume `mongod-avx-bazel-cache` makes it continue
+where it stopped. If more than two compilers run at the same time despite `JOBS=2`, `JOBS` was
+not passed (set the variable on the same line as the command).
 
-### `libatomic.so.1 => not found` beim Bau des Laufzeit-Images
+### `libatomic.so.1 => not found` while building the runtime image
 
-Das Laufzeit-Image braucht `libatomic1`; im Dockerfile dieses Repositorys enthalten. Bei einem
-angepassten Dockerfile ergänzen und ohne neu zu kompilieren nachbauen:
+The runtime image needs `libatomic1`; it is included in this repository's Dockerfile. With a
+customised Dockerfile, add it and rebuild without compiling again:
 `./build.sh --skip-compile --save`.

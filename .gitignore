@@ -1,10 +1,10 @@
-# MongoDB-Build: Arbeitsverzeichnis, Binary, exportierte Images
+# MongoDB build: working directory, binary, exported images
 mongodb-noavx/work/
 mongodb-noavx/bin/
 *.tar.gz
 *.tgz
 
-# Lokale Konfiguration mit Secrets
+# Local configuration containing secrets
 overleaf/.env
 overleaf/overleaf.env
 

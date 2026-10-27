@@ -1,13 +1,13 @@
-# Overleaf Community Edition Extended (CEP) 6.x mit MongoDB 8 ohne AVX
+# Overleaf Community Edition Extended (CEP) 6.x with MongoDB 8 without AVX
 #
-#   cp .env.example .env                    # Compose-Variablen (Images, Port, Projektname)
-#   cp overleaf.env.example overleaf.env    # Overleaf-Konfiguration (Secrets!)
+#   cp .env.example .env                    # Compose variables (images, port, project name)
+#   cp overleaf.env.example overleaf.env    # Overleaf configuration (secrets!)
 #   docker compose up -d
 #
-# TeX Live: vollständig aus texlive/texlive, per Volume eingebunden (Service "texlive-init").
-# Der erste Start kopiert mehrere GB ins Volume und dauert einige Minuten.
+# TeX Live: full distribution from texlive/texlive, mounted as a volume (service "texlive-init").
+# The first start copies several GB into the volume and takes a few minutes.
 #
-# MongoDB-Shell (das no-AVX-Image enthält kein mongosh, der Service mongo-shell schon):
+# MongoDB shell (the no-AVX image has no mongosh, the mongo-shell service does):
 #   docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true"
 #   docker compose exec mongo-shell mongosh "mongodb://mongo:27017/?directConnection=true" \
 #     --quiet --eval 'rs.status().members.map(m => m.stateStr)'
@@ -20,13 +20,13 @@ x-common: &common
 services:
   redis:
     <<: *common
-    # Overleaf 6 verlangt Redis >= 7.4. Valkey 9.x funktioniert ebenfalls
-    # (REDIS_IMAGE=valkey/valkey:9.2-alpine), meldet sich aber als redis_version 7.2.4.
+    # Overleaf 6 requires Redis >= 7.4. Valkey 9.x works as well
+    # (REDIS_IMAGE=valkey/valkey:9.2-alpine) but reports redis_version 7.2.4.
     image: ${REDIS_IMAGE:-redis:7.4-alpine}
     volumes:
       - redis_data:/data
     healthcheck:
-      # redis-cli bzw. valkey-cli, je nach Image
+      # redis-cli or valkey-cli, depending on the image
       test: ["CMD-SHELL", "(redis-cli ping || valkey-cli ping) 2>/dev/null | grep -q PONG"]
       interval: 10s
       timeout: 5s
@@ -34,27 +34,26 @@ services:
 
   mongo:
     <<: *common
-    # MongoDB 8.0 ohne AVX (Docker Hub), Eigenbau siehe ../mongodb-noavx
+    # MongoDB 8.0 without AVX (Docker Hub); to build it yourself see ../mongodb-noavx
     image: ${MONGO_IMAGE:-devferris/mongodb-no-avx:8.0.17-nehalem}
     command: "--replSet rs0 --bind_ip_all --wiredTigerCacheSizeGB ${MONGO_CACHE_GB:-1}"
     environment:
-      # tcmalloc in MongoDB 8 verträgt sich nicht mit glibc-rseq (Performance-Warnung beim Start).
-      # Im aktuellen Dockerfile gesetzt, hier zusätzlich für ältere Image-Builds.
+      # tcmalloc in MongoDB 8 does not cope well with glibc rseq (performance warning at startup).
+      # Set in the current Dockerfile; repeated here for older image builds.
       GLIBC_TUNABLES: glibc.pthread.rseq=0
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      # Kein mongosh im Image -> TCP-Check auf den Port
+      # No mongosh in the image -> TCP check on the port
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/27017'"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Initialisiert das Replica Set (idempotent), wartet auf einen beschreibbaren Primary und
-  # bleibt danach als MongoDB-Shell laufen. Healthy, sobald der Primary bereit ist;
-  # Overleaf startet erst dann.
-  # Der Hostname muss "mongo:27017" sein, sonst trägt MongoDB die Container-ID ein,
-  # die nach einem Neuerstellen nicht mehr stimmt.
+  # Initialises the replica set (idempotent), waits for a writable primary and then keeps
+  # running as a MongoDB shell. Healthy once the primary is ready; Overleaf starts only then.
+  # The host name must be "mongo:27017", otherwise MongoDB records the container ID,
+  # which no longer matches after the container is recreated.
   mongo-shell:
     <<: *common
     image: ${MONGOSH_IMAGE:-alpine/mongosh:latest}
@@ -66,13 +65,13 @@ services:
       - |
         const fs = require("fs");
         try { fs.unlinkSync("/tmp/rs-ready") } catch (e) {}
-        try { rs.status(); print("Replica Set bereits initialisiert"); }
+        try { rs.status(); print("Replica set already initialised"); }
         catch (e) {
           rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]});
-          print("Replica Set initialisiert");
+          print("Replica set initialised");
         }
         while (!db.hello().isWritablePrimary) { sleep(500) }
-        print("Replica Set bereit");
+        print("Replica set ready");
         fs.writeFileSync("/tmp/rs-ready", "");
         while (true) { sleep(3600 * 1000) }
     healthcheck:
@@ -81,12 +80,12 @@ services:
       timeout: 3s
       retries: 60
 
-  # Vollständiges TeX Live per Volume (kein Docker-Socket nötig).
-  # Kopiert TeX Live aus dem texlive/texlive-Image ins Volume "texlive" und beendet sich.
-  # - Kopiert nur, wenn sich der Inhalt geändert hat (Marker = Jahrgang + Prüfsumme der
-  #   Paketdatenbank) -> ein neues TEXLIVE_IMAGE wird beim nächsten "up" übernommen.
-  # - Legt den Link "current" auf den Jahrgang an; Overleaf findet die Binaries über PATH,
-  #   unabhängig davon, welcher Jahrgang im Overleaf-Image selbst steckt.
+  # Full TeX Live via a volume (no Docker socket needed).
+  # Copies TeX Live from the texlive/texlive image into the volume "texlive" and exits.
+  # - Copies only when the content has changed (marker = release year + checksum of the
+  #   package database) -> a new TEXLIVE_IMAGE is picked up on the next "up".
+  # - Creates the link "current" pointing to the release year; Overleaf finds the binaries
+  #   via PATH, regardless of which TeX Live year is baked into the Overleaf image itself.
   texlive-init:
     image: ${TEXLIVE_IMAGE:-texlive/texlive:latest}
     restart: "no"
@@ -99,25 +98,25 @@ services:
         set -eu
         SRC=/usr/local/texlive
         YEAR=$$(ls -1 "$$SRC" | grep -E '^[0-9]{4}$$' | sort | tail -n 1)
-        [ -n "$$YEAR" ] || { echo "FEHLER: kein TeX-Live-Jahrgang unter $$SRC" >&2; exit 1; }
+        [ -n "$$YEAR" ] || { echo "ERROR: no TeX Live release year found under $$SRC" >&2; exit 1; }
         ID="$$YEAR $$(md5sum "$$SRC/$$YEAR/tlpkg/texlive.tlpdb" | cut -d' ' -f1)"
         if [ "$$(cat /target/.texlive-source 2>/dev/null || true)" != "$$ID" ]; then
-          echo "Kopiere TeX Live $$YEAR ins Volume (einmalig, einige Minuten) ..."
+          echo "Copying TeX Live $$YEAR into the volume (one-off, a few minutes) ..."
           find /target -mindepth 1 -delete
           cp -a "$$SRC/." /target/
           echo "$$ID" > /target/.texlive-source
         else
-          echo "TeX Live $$YEAR im Volume ist aktuell"
+          echo "TeX Live $$YEAR in the volume is up to date"
         fi
         ln -sfn "$$YEAR" /target/current
         test -x /target/current/bin/x86_64-linux/latexmk \
-          || { echo "FEHLER: latexmk fehlt in /target/current/bin/x86_64-linux" >&2; exit 1; }
+          || { echo "ERROR: latexmk missing in /target/current/bin/x86_64-linux" >&2; exit 1; }
         echo "OK: $$(/target/current/bin/x86_64-linux/pdflatex --version | head -n 1)"
 
   sharelatex:
     <<: *common
     image: ${OVERLEAF_IMAGE:-overleafcep/sharelatex:6.3.0-ext-v5.1}
-    # Overleaf-Konfiguration nur hier, nicht in allen Services
+    # Overleaf configuration only here, not for every service
     env_file: overleaf.env
     depends_on:
       mongo-shell:
@@ -127,21 +126,21 @@ services:
       texlive-init:
         condition: service_completed_successfully
     ports:
-      # Für einen Reverse Proxy auf demselben Host z. B. OVERLEAF_BIND=127.0.0.1:8088
+      # For a reverse proxy on the same host use e.g. OVERLEAF_BIND=127.0.0.1:8088
       - "${OVERLEAF_BIND:-8088}:80"
     labels:
       autoheal: "true"
     volumes:
       - sharelatex_data:/var/lib/overleaf
-      # Ersetzt das minimale TeX Live des Overleaf-Images durch das vollständige
+      # Replaces the minimal TeX Live of the Overleaf image with the full distribution
       - texlive:/usr/local/texlive:ro
     environment:
       OVERLEAF_MONGO_URL: mongodb://mongo/sharelatex?replicaSet=rs0
       OVERLEAF_REDIS_HOST: redis
       REDIS_HOST: redis
-      # TeX Live aus dem Volume zuerst im PATH: Overleaf ruft latexmk/pdflatex ohne festen
-      # Pfad auf. Die Verknüpfungen des Images in /usr/local/bin zeigen auf dessen eigenen
-      # Jahrgang und laufen ins Leere, wenn das Volume aus einem anderen Jahrgang stammt.
+      # TeX Live from the volume first in PATH: Overleaf invokes latexmk/pdflatex without a fixed
+      # path. The image's symlinks in /usr/local/bin point to its own TeX Live year and break
+      # when the volume comes from a different year.
       PATH: /usr/local/texlive/current/bin/x86_64-linux:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost/status || exit 1"]
